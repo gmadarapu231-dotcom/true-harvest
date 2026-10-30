@@ -119,9 +119,9 @@ export async function seedIfEmpty(db: Queryable & { tx<T>(fn: (q: Queryable) => 
       const pack = o.channel === 'b2c' ? 10 : 0;
       const ago = `${o.daysAgo} days`;
       const [ord] = await q.query(
-        `INSERT INTO orders (order_no, buyer_id, channel, status, items_total, delivery_fee, packing_fee, total, payment_mode, payment_status, address, pin, delivery_date, slot, delivery_otp, created_at, delivered_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'07:00-10:00',$14, now() - $15::interval, CASE WHEN $4 IN ('delivered','completed') THEN now() - $15::interval + interval '14 hours' END) RETURNING id`,
-        [`FM-DEMO-${demoNo++}`, o.buyer, o.channel, o.order, items, fee, pack, items + fee + pack, o.pay, o.payStatus, o.address, o.pin, day(-o.daysAgo + 1), '4321', ago],
+        `INSERT INTO orders (order_no, buyer_id, channel, status, items_total, delivery_fee, packing_fee, total, payment_mode, payment_status, address, pin, delivery_date, slot, delivery_otp, created_at, delivered_at, completed_at, commission_amount)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'07:00-10:00',$14, now() - $15::interval, CASE WHEN $4 IN ('delivered','completed') THEN now() - $15::interval + interval '14 hours' END, CASE WHEN $4 = 'completed' THEN now() - $15::interval + interval '38 hours' END, CASE WHEN $4 = 'completed' THEN $16::numeric ELSE 0 END) RETURNING id`,
+        [`FM-DEMO-${demoNo++}`, o.buyer, o.channel, o.order, items, fee, pack, items + fee + pack, o.pay, o.payStatus, o.address, o.pin, day(-o.daysAgo + 1), '4321', ago, Math.round(items * rate * 100) / 100],
       );
       const [sub] = await q.query(
         `INSERT INTO sub_orders (order_id, farmer_id, status, items_total, commission_rate, commission, accepted_at, delivered_at, partner_id, accept_deadline, created_at)
