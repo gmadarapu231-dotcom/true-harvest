@@ -1,0 +1,32 @@
+{
+  "name": "farmora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Farm-to-market marketplace MVP: farmers, households, businesses and an operations dashboard.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "next": "^16.4.3",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "5.9"
+  }
+}
