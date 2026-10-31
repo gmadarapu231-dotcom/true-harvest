@@ -1,0 +1,21 @@
+# Hosting: the website on Render, the database on Neon's free tier (same setup as warangal360).
+# Render → New → Blueprint → pick this repo → paste the Neon connection string as DATABASE_URL → Apply.
+# The app creates its tables on start and loads the demo data once, into an empty database.
+services:
+  - type: web
+    name: trueharvest
+    runtime: node
+    # "free" sleeps after 15 idle minutes; switch to "starter" ($7 a month) to keep it awake.
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npx next start -p $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Neon connection string (Neon dashboard → Connect), ending in ?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_BRAND_NAME
+        value: TrueHarvest

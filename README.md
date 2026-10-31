@@ -26,7 +26,7 @@ npm run dev            # http://localhost:3000
 
 With no `DATABASE_URL`, the app runs an embedded PostgreSQL (PGlite) stored in `~/.farmora/pglite`, creates the schema and loads demo data on first start. Delete that folder to start fresh.
 
-For a real database:
+For a local Postgres, `docker compose up -d` starts one (user, password and database all `trueharvest`). Then:
 
 ```bash
 DATABASE_URL=postgres://user:pass@host:5432/farmora npm run build && npm start
@@ -55,6 +55,16 @@ DATABASE_URL=postgres://... npm test
 ```
 
 `tests/inventory.test.ts` fires 100 simultaneous one-kilo orders at a 50 kg listing (SRS R-9.7). Exactly 50 succeed, 50 kg is reserved, and the failed orders leave nothing behind. It also checks that a rejected order puts its stock back on sale. Use a throwaway database; the test inserts rows.
+
+## Put it online (free: Render + Neon)
+
+`render.yaml` runs the website on Render; the database is a free Neon Postgres. It is the same setup as warangal360.
+
+1. At neon.tech, sign up and create a project (region: Singapore). Copy the connection string from **Connect**.
+2. At render.com, sign in with GitHub. New → Blueprint → choose this repo, paste the Neon string as `DATABASE_URL` → Apply.
+3. On first start the app creates its tables and loads the demo data once. The link is shown at the top of the `trueharvest` service.
+
+The free plan sleeps after 15 idle minutes, and the next visit takes about a minute. Change `plan: free` to `plan: starter` in `render.yaml` ($7 a month) to keep it awake.
 
 ## How it is built
 
