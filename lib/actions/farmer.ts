@@ -7,6 +7,7 @@ import { farmerDecide, advanceSubOrder } from '../orders';
 import { getSettings } from '../settings';
 import { notify, notifyAdmins } from '../notify';
 import { UNITS, REJECT_REASONS, type Unit } from '../config';
+import { districtInfo, isDistrict, isMandal } from '../geo';
 
 const day = (offset: number) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
 
@@ -136,8 +137,15 @@ export async function saveFarmerProfile(fd: FormData) {
   const ifsc = str(fd, 'bank_ifsc').toUpperCase();
   if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) back('/farmer/profile', 'IFSC code looks wrong.');
   const upi = str(fd, 'upi_id');
+  const district = str(fd, 'district');
+  const was = await one<{ district: string; mandal: string }>('SELECT district, mandal FROM farmer_profiles WHERE user_id=$1', [u.id]);
+  // A mandal typed before the list existed is kept until the farmer picks one.
+  const kept = was?.district === district && was.mandal === str(fd, 'mandal');
+  if (!isDistrict(district) || !(kept || isMandal(district, str(fd, 'mandal')))) back('/farmer/profile', 'Choose your district and mandal.');
   await tx(async (q) => {
     const [fp] = await q.query('SELECT * FROM farmer_profiles WHERE user_id=$1', [u.id]);
+    await q.query('UPDATE farmer_profiles SET district=$2, state=$3 WHERE user_id=$1', [u.id, district, districtInfo(district)!.state]);
+    await q.query('UPDATE users SET district=$2 WHERE id=$1', [u.id, district]);
     await q.query(
       `UPDATE farmer_profiles SET village=$2, mandal=$3, farm_size_acres=$4, main_crops=$5, irrigation=$6,
               id_doc_type = CASE WHEN $7 <> '' THEN $7 ELSE id_doc_type END, id_doc_last4 = CASE WHEN $8 <> '' THEN $8 ELSE id_doc_last4 END,

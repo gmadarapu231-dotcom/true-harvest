@@ -1,6 +1,7 @@
 import { farmerContext } from '@/lib/farmer-page';
 import { saveFarmerProfile } from '@/lib/actions/farmer';
 import { BRAND } from '@/lib/config';
+import PlaceSelect from '@/components/PlaceSelect';
 import LogoutButton from '@/components/LogoutButton';
 import { Chip, Flash, PageHead } from '@/components/ui';
 
@@ -18,9 +19,9 @@ export default async function FarmerProfile({ searchParams }: { searchParams: Pr
       <form action={saveFarmerProfile} className="form">
         <fieldset>
           <legend>{te ? 'పొలం' : 'Farm'}</legend>
+          <PlaceSelect te={te} state={fp.state} district={fp.district} mandal={fp.mandal} />
           <div className="grid2">
             <label>{te ? 'గ్రామం' : 'Village'}<input name="village" defaultValue={fp.village} /></label>
-            <label>{te ? 'మండలం' : 'Mandal'}<input name="mandal" defaultValue={fp.mandal} /></label>
             <label>{te ? 'ఎకరాలు' : 'Acres'}<input name="farm_size_acres" inputMode="decimal" defaultValue={fp.farm_size_acres} /></label>
             <label>{te ? 'నీటి వసతి' : 'Irrigation'}<select name="irrigation" defaultValue={fp.irrigation}><option value="">—</option><option>Borewell</option><option>Canal</option><option>Drip</option><option>Rain-fed</option></select></label>
           </div>

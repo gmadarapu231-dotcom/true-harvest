@@ -4,9 +4,8 @@ import { one, tx } from '../db';
 import { attempt, back, str, num, int } from '../http';
 import { notify, notifyAdmins, audit } from '../notify';
 import { EQUIPMENT_KINDS, INPUT_KINDS } from '../services';
-import { DISTRICTS } from '../config';
+import { ALL_DISTRICTS } from '../geo';
 
-const ALL_DISTRICTS = Object.values(DISTRICTS).flat();
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 const today = () => new Date().toISOString().slice(0, 10);
 const addDays = (d: string, n: number) => new Date(new Date(d + 'T00:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);

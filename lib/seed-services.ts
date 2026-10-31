@@ -17,7 +17,7 @@ export async function seedServicesIfEmpty(db: Queryable & { tx<T>(fn: (q: Querya
       [admin, 'harvester', 'Combine harvester, custom hiring centre', 'Run by the TrueHarvest custom hiring centre. Book at least a day ahead.', 'Hanumakonda', 'Kazipet', 2400, 18000, 2, true],
       [sujatha, 'tractor', 'Tractor 45 HP with trailer', 'Ploughing, puddling and transport to the collection point.', 'Siddipet', 'Mulugu', 900, 6500, 2, true],
       [mallesh, 'rotavator', 'Rotavator 7 ft', 'Seedbed preparation after harvest. Tractor and driver included.', 'Jangaon', 'Station Ghanpur', 1100, null, 1, true],
-      [padma, 'drone', 'Spraying drone (10 litre)', 'Sprays about 1 acre in 8 minutes. Licensed pilot included. Chemicals not included.', 'NTR', 'Nuzvid', null, 4500, 1, true],
+      [padma, 'drone', 'Spraying drone (10 litre)', 'Sprays about 1 acre in 8 minutes. Licensed pilot included. Chemicals not included.', 'Eluru', 'Nuzvid', null, 4500, 1, true],
       [ramesh, 'power_tiller', 'Power tiller 12 HP', 'Good for vegetable beds and small plots.', 'Hanumakonda', 'Hasanparthy', 450, 3200, 2, false],
       [admin, 'thresher', 'Multi-crop thresher', 'Red gram, green gram, jowar and maize.', 'Siddipet', 'Gajwel', 700, 5000, 2, true],
     ];

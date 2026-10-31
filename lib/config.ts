@@ -11,10 +11,8 @@ export const BRAND = {
 export const UNITS = { kg: 1, quintal: 100, tonne: 1000, crate: 0 } as const; // crate weight comes from the crop
 export type Unit = keyof typeof UNITS;
 
-export const DISTRICTS: Record<string, string[]> = {
-  Telangana: ['Hyderabad', 'Ranga Reddy', 'Medchal-Malkajgiri', 'Sangareddy', 'Vikarabad', 'Siddipet', 'Medak', 'Nalgonda', 'Khammam', 'Warangal', 'Hanumakonda', 'Jangaon', 'Karimnagar', 'Nizamabad', 'Mahabubnagar'],
-  'Andhra Pradesh': ['Guntur', 'Krishna', 'NTR', 'Chittoor', 'Anantapuramu', 'Kurnool', 'East Godavari', 'West Godavari', 'Prakasam', 'Nellore', 'Visakhapatnam', 'Kadapa'],
-};
+// Every district and mandal of both states lives in lib/geo.ts.
+export { DISTRICTS } from './geo';
 
 export const CATEGORIES = [
   { id: 'vegetables', en: 'Vegetables', te: 'కూరగాయలు' },

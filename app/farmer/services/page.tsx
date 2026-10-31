@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { farmerContext } from '@/lib/farmer-page';
 import { query } from '@/lib/db';
-import { DISTRICTS } from '@/lib/config';
+import DistrictOptions from '@/components/DistrictOptions';
 import { EQUIPMENT_KINDS } from '@/lib/services';
 import { createEquipment, setEquipmentStatus, decideBooking, advanceInputOrder } from '@/lib/actions/services';
 import PhotoInput from '@/components/PhotoInput';
@@ -102,7 +102,7 @@ export default async function FarmerServices({ searchParams }: { searchParams: P
                 <label>{te ? 'గంటకు ధర (₹)' : 'Rate per hour (₹)'}<input name="rate_hour" type="number" min="0" step="10" /></label>
                 <label>{te ? 'రోజుకు ధర (₹)' : 'Rate per day (₹)'}<input name="rate_day" type="number" min="0" step="50" /></label>
                 <label>{te ? 'కనీస గంటలు' : 'Minimum hours'}<input name="min_hours" type="number" min="1" defaultValue="1" /></label>
-                <label>{te ? 'జిల్లా' : 'District'}<select name="district" defaultValue={fp.district}>{Object.values(DISTRICTS).flat().map((d) => <option key={d}>{d}</option>)}</select></label>
+                <label>{te ? 'జిల్లా' : 'District'}<select name="district" defaultValue={fp.district}><DistrictOptions te={te} /></select></label>
               </div>
               <label>{te ? 'గ్రామం' : 'Village'}<input name="village" defaultValue={fp.village} /></label>
               <label>{te ? 'వివరణ' : 'Description'}<textarea name="description" placeholder="Crops it handles, acres per hour, what is included" /></label>

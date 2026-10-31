@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { currentUser } from '@/lib/auth';
 import { onboard } from '@/lib/actions/auth';
 import { Flash } from '@/components/ui';
-import { DISTRICTS, BUSINESS_TYPES } from '@/lib/config';
+import { BUSINESS_TYPES } from '@/lib/config';
+import PlaceSelect from '@/components/PlaceSelect';
 
 export const metadata = { title: 'Welcome' };
 
@@ -20,22 +21,8 @@ export default async function Onboarding({ searchParams }: { searchParams: Promi
           <label>{farmer ? 'పేరు · Name' : 'Your name'}<input name="name" required defaultValue={u.name} /></label>
           {farmer ? (
             <>
-              <div className="grid2">
-                <label>గ్రామం · Village<input name="village" required /></label>
-                <label>మండలం · Mandal<input name="mandal" required /></label>
-              </div>
-              <div className="grid2">
-                <label>రాష్ట్రం · State
-                  <select name="state"><option>Telangana</option><option>Andhra Pradesh</option></select>
-                </label>
-                <label>జిల్లా · District
-                  <select name="district" required>
-                    {Object.entries(DISTRICTS).map(([st, ds]) => (
-                      <optgroup key={st} label={st}>{ds.map((d) => <option key={d}>{d}</option>)}</optgroup>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <label>గ్రామం · Village<input name="village" required /></label>
+              <PlaceSelect te={u.lang === 'te'} />
               <div className="grid3">
                 <label>PIN code<input name="pin" inputMode="numeric" pattern="\d{6}" /></label>
                 <label>ఎకరాలు · Acres<input name="farm_size_acres" inputMode="decimal" /></label>

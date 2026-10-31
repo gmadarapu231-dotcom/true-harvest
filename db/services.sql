@@ -139,3 +139,8 @@ CREATE TABLE IF NOT EXISTS meetup_rsvps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (meetup_id, user_id)
 );
+
+-- District names from before the full district list (lib/geo.ts). Older rows move to the current names.
+UPDATE farmer_profiles SET district = CASE district WHEN 'Nellore' THEN 'Sri Potti Sriramulu Nellore' WHEN 'Kadapa' THEN 'YSR Kadapa' ELSE district END WHERE district IN ('Nellore', 'Kadapa');
+UPDATE equipment SET district = CASE district WHEN 'Nellore' THEN 'Sri Potti Sriramulu Nellore' WHEN 'Kadapa' THEN 'YSR Kadapa' ELSE district END WHERE district IN ('Nellore', 'Kadapa');
+UPDATE crop_groups SET district = CASE district WHEN 'Nellore' THEN 'Sri Potti Sriramulu Nellore' WHEN 'Kadapa' THEN 'YSR Kadapa' ELSE district END WHERE district IN ('Nellore', 'Kadapa');

@@ -15,15 +15,23 @@ const BASE = `
 export type Channel = 'b2c' | 'b2b';
 const channelSql = (ch: Channel) => (ch === 'b2b' ? "l.channels IN ('b2b','both')" : "l.channels IN ('b2c','both')");
 
-export async function browse(opts: { channel: Channel; category?: string; q?: string; farmerId?: number; cropId?: number; sort?: string }) {
+export async function browse(opts: { channel: Channel; category?: string; q?: string; farmerId?: number; cropId?: number; sort?: string; state?: string; district?: string }) {
   const where: string[] = [channelSql(opts.channel)];
   const params: unknown[] = [];
   if (opts.category) { params.push(opts.category); where.push(`c.category = $${params.length}`); }
   if (opts.q) { params.push(`%${opts.q}%`); where.push(`(c.name ILIKE $${params.length} OR c.name_te ILIKE $${params.length} OR l.variety ILIKE $${params.length} OR u.name ILIKE $${params.length})`); }
   if (opts.farmerId) { params.push(opts.farmerId); where.push(`l.farmer_id = $${params.length}`); }
+  if (opts.state) { params.push(opts.state); where.push(`fp.state = $${params.length}`); }
+  if (opts.district) { params.push(opts.district); where.push(`fp.district = $${params.length}`); }
   if (opts.cropId) { params.push(opts.cropId); where.push(`l.crop_id = $${params.length}`); }
   const order = opts.sort === 'price' ? 'l.price_per_kg ASC' : opts.sort === 'harvest' ? 'l.ready_from DESC' : 'l.ready_from <= current_date DESC, l.created_at DESC';
   return query(`${BASE} AND ${where.join(' AND ')} ORDER BY ${order} LIMIT 120`, params);
+}
+
+/** Districts with stock on sale for a channel, for the shop's area filter. */
+export async function stockedDistricts(channel: Channel) {
+  return query<{ state: string; district: string; n: number }>(
+    `SELECT fp.state, fp.district, count(*)::int AS n FROM (${BASE} AND ${channelSql(channel)}) b JOIN farmer_profiles fp ON fp.user_id=b.farmer_id GROUP BY 1, 2 ORDER BY 1 DESC, 2`);
 }
 
 export async function listingById(id: number) {

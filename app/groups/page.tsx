@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { query } from '@/lib/db';
 import { currentUser } from '@/lib/auth';
 import { getLang } from '@/lib/i18n';
-import { DISTRICTS } from '@/lib/config';
+import DistrictOptions from '@/components/DistrictOptions';
 import { createGroup } from '@/lib/actions/services';
 import { Flash, PageHead, Empty, fmtKg, fmtTime } from '@/components/ui';
 
@@ -32,7 +32,7 @@ export default async function Groups({ searchParams }: { searchParams: Promise<R
       <Flash sp={sp} />
       <form className="row card filterbar" method="get">
         <select name="crop" defaultValue={sp.crop ?? ''} aria-label="Crop"><option value="">{te ? 'అన్ని పంటలు' : 'All crops'}</option>{crops.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.name_te}</option>)}</select>
-        <select name="district" defaultValue={sp.district ?? ''} aria-label="District"><option value="">{te ? 'అన్ని జిల్లాలు' : 'All districts'}</option>{Object.entries(DISTRICTS).map(([s, ds]) => <optgroup key={s} label={s}>{ds.map((d) => <option key={d}>{d}</option>)}</optgroup>)}</select>
+        <select name="district" defaultValue={sp.district ?? ''} aria-label="District"><option value="">{te ? 'అన్ని జిల్లాలు' : 'All districts'}</option><DistrictOptions te={te} /></select>
         <button className="btn btn-sm">{te ? 'చూపించు' : 'Filter'}</button>
       </form>
       {!groups.length ? <Empty>No group for this crop yet.{u?.role === 'farmer' ? ' Start one below.' : ''}</Empty> : (
@@ -53,7 +53,7 @@ export default async function Groups({ searchParams }: { searchParams: Promise<R
           <h2>{te ? 'కొత్త సమూహం ప్రారంభించండి' : 'Start a crop group'}</h2>
           <div className="grid3">
             <label>{te ? 'పంట' : 'Crop'}<select name="crop_id" required defaultValue={sp.crop ?? ''}><option value="">Choose</option>{crops.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name_te} ({c.name})</option>)}</select></label>
-            <label>{te ? 'జిల్లా' : 'District'}<select name="district" required defaultValue={u.district || ''}><option value="">Choose</option>{Object.entries(DISTRICTS).map(([s, ds]) => <optgroup key={s} label={s}>{ds.map((d) => <option key={d}>{d}</option>)}</optgroup>)}</select></label>
+            <label>{te ? 'జిల్లా' : 'District'}<select name="district" required defaultValue={u.district || ''}><option value="">Choose</option><DistrictOptions te={te} /></select></label>
             <label>{te ? 'మీ ఎకరాలు' : 'Your acres'}<input name="acres" type="number" min="0" step="0.5" /></label>
           </div>
           <label>{te ? 'సమూహం పేరు' : 'Group name (optional)'}<input name="name" placeholder="e.g. Jangaon tomato growers" /></label>

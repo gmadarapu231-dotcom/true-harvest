@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { DISTRICTS } from '@/lib/config';
+import DistrictOptions from '@/components/DistrictOptions';
 import { EQUIPMENT_KINDS, INPUT_KINDS } from '@/lib/services';
 import { createEquipment, setEquipmentStatus, decideBooking, advanceInputOrder, saveInput } from '@/lib/actions/services';
 import { Chip, Flash, PageHead, Stat, fmtMoney, fmtDate, fmtTime } from '@/components/ui';
@@ -150,7 +150,7 @@ export default async function AdminServices({ searchParams }: { searchParams: Pr
               <label>Name<input name="name" required /></label>
               <label>Rate per hour (₹)<input name="rate_hour" type="number" min="0" /></label>
               <label>Rate per day (₹)<input name="rate_day" type="number" min="0" /></label>
-              <label>District<select name="district">{Object.values(DISTRICTS).flat().map((d) => <option key={d}>{d}</option>)}</select></label>
+              <label>District<select name="district"><DistrictOptions /></select></label>
               <label>Village<input name="village" /></label>
             </div>
             <label>Description<textarea name="description" /></label>

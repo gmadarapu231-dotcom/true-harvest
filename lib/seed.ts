@@ -65,9 +65,9 @@ export async function seedIfEmpty(db: Queryable & { tx<T>(fn: (q: Queryable) => 
 
     const farmers = [
       { phone: '9100000001', name: 'Ramesh Reddy', village: 'Hasanparthy', mandal: 'Hasanparthy', district: 'Hanumakonda', state: 'Telangana', acres: 4, crops: 'Tomato, Brinjal, Green chilli', status: 'verified' },
-      { phone: '9100000002', name: 'Sujatha Devi', village: 'Mulugu', mandal: 'Mulugu', district: 'Siddipet', state: 'Telangana', acres: 2.5, crops: 'Spinach, Gongura, Coriander, Okra', status: 'verified' },
+      { phone: '9100000002', name: 'Sujatha Devi', village: 'Mulugu', mandal: 'Mulug', district: 'Siddipet', state: 'Telangana', acres: 2.5, crops: 'Spinach, Gongura, Coriander, Okra', status: 'verified' },
       { phone: '9100000003', name: 'Venkatesh Naidu', village: 'Prathipadu', mandal: 'Prathipadu', district: 'Guntur', state: 'Andhra Pradesh', acres: 10, crops: 'Dry red chilli, Turmeric, Red gram', status: 'verified' },
-      { phone: '9100000004', name: 'Padmavathi K', village: 'Nuzvid', mandal: 'Nuzvid', district: 'NTR', state: 'Andhra Pradesh', acres: 6, crops: 'Mango, Banana, Guava', status: 'verified' },
+      { phone: '9100000004', name: 'Padmavathi K', village: 'Nuzvid', mandal: 'Nuzvid', district: 'Eluru', state: 'Andhra Pradesh', acres: 6, crops: 'Mango, Banana, Guava', status: 'verified' },
       { phone: '9100000005', name: 'Mallesh Yadav', village: 'Station Ghanpur', mandal: 'Station Ghanpur', district: 'Jangaon', state: 'Telangana', acres: 3, crops: 'Onion, Potato, Cabbage', status: 'submitted' },
     ];
     const fid: Record<string, number> = {};

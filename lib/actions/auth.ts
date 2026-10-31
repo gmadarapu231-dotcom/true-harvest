@@ -5,6 +5,7 @@ import { query, one, tx } from '../db';
 import { issueOtp, verifyOtp, normalisePhone, startSession, endSession, currentUser, homeFor, type Role } from '../auth';
 import { back, str, num } from '../http';
 import { BUSINESS_TYPES } from '../config';
+import { districtInfo, isDistrict, isMandal } from '../geo';
 
 const SIGNUP_ROLES: Role[] = ['consumer', 'farmer', 'business'];
 
@@ -59,11 +60,13 @@ export async function onboard(fd: FormData) {
   const name = str(fd, 'name');
   if (name.length < 2) back('/onboarding', 'Please enter your name.');
   if (!fd.get('consent')) back('/onboarding', 'Please agree to the privacy terms to continue.');
+  if (u.role === 'farmer' && !isDistrict(str(fd, 'district'), str(fd, 'state'))) back('/onboarding', 'Please choose your district.');
+  if (u.role === 'farmer' && !isMandal(str(fd, 'district'), str(fd, 'mandal'))) back('/onboarding', 'Please choose your mandal.');
   await tx(async (q) => {
     await q.query('UPDATE users SET name=$2, address=$3, pin=$4, district=$5, consent_at=now() WHERE id=$1',
       [u.id, name, str(fd, 'address'), str(fd, 'pin'), str(fd, 'district')]);
     if (u.role === 'farmer') {
-      const state = str(fd, 'state') === 'Andhra Pradesh' ? 'Andhra Pradesh' : 'Telangana';
+      const state = districtInfo(str(fd, 'district'))!.state;
       const acres = num(fd, 'farm_size_acres');
       await q.query(
         `INSERT INTO farmer_profiles (user_id, village, mandal, district, state, pin, farm_size_acres, main_crops, farmer_type, status)
