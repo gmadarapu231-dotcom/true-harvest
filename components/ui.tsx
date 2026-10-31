@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BRAND } from '@/lib/config';
+import Icon from './Icon';
 
 export const fmtMoney = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 export const fmtKg = (kg: number) => {
@@ -42,7 +44,7 @@ export function CropArt({ emoji, photoId, size = 'md', alt }: { emoji: string; p
 
 export function Flash({ sp }: { sp: { error?: string; ok?: string } }) {
   if (sp.error) return <div className="flash flash-error" role="alert">{sp.error}</div>;
-  if (sp.ok) return <div className="flash flash-ok" role="status">{sp.ok}</div>;
+  if (sp.ok) return <div className="flash flash-ok toast" role="status"><img src="/brand/mark.png" alt="" width={28} height={28} /><span>{sp.ok}</span></div>;
   return null;
 }
 
@@ -58,10 +60,10 @@ export function PageHead({ title, sub, action }: { title: ReactNode; sub?: React
   );
 }
 
-export function Stat({ label, value, hint, href }: { label: string; value: ReactNode; hint?: ReactNode; href?: string }) {
+export function Stat({ label, value, hint, href, icon }: { label: string; value: ReactNode; hint?: ReactNode; href?: string; icon?: string }) {
   const body = (
     <>
-      <div className="stat-label">{label}</div>
+      <div className="stat-label">{icon ? <span className="stat-ic"><Icon name={icon} size={18} /></span> : null}{label}</div>
       <div className="stat-value num">{value}</div>
       {hint ? <div className="stat-hint">{hint}</div> : null}
     </>
@@ -78,13 +80,42 @@ export function Stars({ n }: { n: number | null }) {
   return <span className="stars" aria-label={`${n.toFixed(1)} out of 5`}>★ {Number(n).toFixed(1)}</span>;
 }
 
-export function Logo() {
+// Brand lockup: the leaf, wheat and handshake mark plus the two-tone wordmark ("True" in script green, "Harvest" in bold gold).
+export function Logo({ size = 40, tagline = false, light = false }: { size?: number; tagline?: boolean; light?: boolean }) {
+  const cut = BRAND.name.search(/(?<=.)[A-Z]/);
+  const [a, b] = cut > 0 ? [BRAND.name.slice(0, cut), BRAND.name.slice(cut)] : [BRAND.name, ''];
   return (
-    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
-      <rect width="32" height="32" rx="9" fill="var(--green)" />
-      <path d="M16 25V14" stroke="var(--cream)" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M16 15c0-4 3-7 8-7 0 4.5-3 7.5-8 7z" fill="var(--turmeric)" />
-      <path d="M16 18.5c0-3.5-2.6-6-7-6 0 3.9 2.6 6.3 7 6z" fill="var(--cream)" />
+    <span className={`logo${light ? ' logo-light' : ''}`}>
+      <img src={light ? '/brand/mark-white.png' : '/brand/mark.png'} width={size} height={size} alt="" />
+      <span className="wordmark">
+        <span className="wm"><span className="wm-a">{a}</span><span className="wm-b">{b}</span></span>
+        {tagline ? <small>{BRAND.tagline}</small> : null}
+      </span>
+    </span>
+  );
+}
+
+/** Small server-rendered line chart; points are plotted evenly left to right. */
+export function LineChart({ points, height = 230, fmt = (v: number) => String(Math.round(v)) }: { points: { label: string; value: number }[]; height?: number; fmt?: (v: number) => string }) {
+  const W = 820, H = height, P = { l: 58, r: 30, t: 14, b: 30 };
+  if (!points.length) return <p className="muted">No data yet.</p>;
+  const vals = points.map((p) => Number(p.value));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += 1; lo = Math.max(0, lo - 1); }
+  const pad = (hi - lo) * 0.12; lo = Math.max(0, lo - pad); hi += pad;
+  const x = (i: number) => P.l + (points.length === 1 ? (W - P.l - P.r) / 2 : (i * (W - P.l - P.r)) / (points.length - 1));
+  const y = (v: number) => P.t + (1 - (v - lo) / (hi - lo)) * (H - P.t - P.b);
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(Number(p.value)).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)} ${H - P.b} L${x(0).toFixed(1)} ${H - P.b} Z`;
+  const ticks = [0, 0.5, 1].map((f) => lo + f * (hi - lo));
+  const every = Math.max(1, Math.ceil(points.length / 6));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="linechart" role="img" aria-label={`Trend from ${fmt(vals[0])} to ${fmt(vals[vals.length - 1])}`}>
+      {ticks.map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" /><text x={P.l - 8} y={y(t) + 4} textAnchor="end">{fmt(t)}</text></g>)}
+      <path d={area} className="area" />
+      <path d={line} className="stroke" />
+      {points.map((p, i) => (i % every === 0 || i === points.length - 1) ? <text key={i} x={x(i)} y={H - 6} textAnchor="middle">{p.label}</text> : null)}
+      <circle cx={x(points.length - 1)} cy={y(vals[vals.length - 1])} r="4.5" className="dot" />
     </svg>
   );
 }

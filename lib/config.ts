@@ -1,10 +1,10 @@
 // Fixed product constants. Anything ops may want to tune lives in settings (lib/settings.ts) instead.
 export const BRAND = {
-  name: process.env.NEXT_PUBLIC_BRAND_NAME || 'Farmora',
-  tagline: 'From every farm. To every home. To every business.',
+  name: process.env.NEXT_PUBLIC_BRAND_NAME || 'TrueHarvest',
+  tagline: 'Connecting Farmers. Feeding the World.',
   launchCity: 'Hyderabad',
   supportPhone: '+91 40 4000 0000',
-  grievanceOfficer: 'Grievance Officer, Farmora (placeholder), support@example.com',
+  grievanceOfficer: 'Grievance Officer, TrueHarvest (placeholder), support@example.com',
   fssai: 'FSSAI licence no. to be added',
 };
 

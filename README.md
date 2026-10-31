@@ -1,4 +1,6 @@
-# Farmora: farm-to-market marketplace (MVP)
+# TrueHarvest: farm-to-market marketplace (MVP)
+
+*Connecting Farmers. Feeding the World.*
 
 One web app that serves five audiences from one shared backend and one PostgreSQL database:
 
@@ -8,9 +10,10 @@ One web app that serves five audiences from one shared backend and one PostgreSQ
 | Farmers | `/farmer` (Telugu by default) | Register, add KYC and UPI/bank (only last 4 digits stored), list crops with photo, see payout per kg before publishing, manage stock (add, remove, spoiled, pause), accept or reject orders inside a 60-minute window, mark packed, answer business requests with offers, see earnings and settlements, listen to screen help in Telugu |
 | Businesses | `/business`, `/shop` (wholesale prices) | Post requirements (one-off or recurring), compare farm offers beside mandi prices, accept an offer (stock is reserved at that moment), order direct from the wholesale catalogue, GSTIN on profile |
 | Delivery partners | `/partner` | See assigned pickups and drops, call and navigate, mark picked up, deliver only with the customer’s 4-digit code, collect pay-on-delivery |
+| Farm services | `/crops`, `/rentals`, `/inputs`, `/groups`, `/farmer/services` | Catalogue of 60 vegetables, greens, fruits and grains with Telugu names and who sells each today; rent harvesters, tractors, drones and other machines by the hour or day (owners confirm, double booking is blocked); order certified seeds and inputs from licensed dealers, cash on delivery, with stock that cannot oversell; crop groups (FPO Connect) where farmers growing the same crop join, post, pool harvest into bigger lots and schedule meetups with RSVPs |
 | Operations | `/admin` | KPIs and alerts, verify farmers and businesses, review a new farmer’s first three listings, stock by crop and district, all orders with partner assignment and cancellation, enquiry board, complaints with refunds and farmer chargebacks, settlements with UTR and payout holds, mandi prices, staff, editable rules and feature flags, append-only audit log |
 
-The brand name is a placeholder (set `NEXT_PUBLIC_BRAND_NAME`). Jaikisan and TG Organics were used only as references for features and flow; the design, copy and code are original.
+The look follows the TrueHarvest brand mockups: the leaf, wheat and handshake mark (cut from the supplied logo into `public/brand/`), a green and gold palette on cream, Kaushan Script and Poppins for the wordmark and headings, a field hero with "I am a Farmer" and "I am a Buyer", sidebar dashboards for farmers and operations, a bottom tab bar on phones, and toast messages. All money is shown in ₹. Jaikisan and TG Organics were used only as references for features and flow.
 
 ## Run it
 
@@ -64,12 +67,13 @@ DATABASE_URL=postgres://... npm test
 - **Rules** (`lib/settings.ts`, `/admin/settings`): commission (4% household, 2% business), delivery fee ₹35 under ₹599, packing ₹10, minimum order ₹299, accept windows, timers, serviceable PIN codes, slots, and the multi-farmer cart switch (off by default).
 - **Telugu**: `lib/i18n.ts`; the farmer side is fully bilingual. Voice help uses the phone’s built-in Telugu voice until recorded audio is ready.
 - **Installable app (PWA)**: manifest, icons, service worker and offline page. Photos are compressed on the phone to under 300 KB before upload.
+- **Farm services** (`db/services.sql`, `lib/actions/services.ts`). Machine bookings hold whole dates; confirming locks the machine row and refuses overlapping confirmed bookings. Seed orders take stock with one conditional `UPDATE … WHERE stock >= qty`; cancelling puts it back. Farmer-listed machines are reviewed by ops before going live; ops can list custom hiring centre machines and manage the inputs catalogue at `/admin/services`.
 - **Read API for the future mobile apps**: `GET /api/v1/listings`, `GET /api/v1/health`.
 
 ```
 app/            pages and routes (shop, farmer, business, partner, admin)
 components/     shared UI
-db/schema.sql   the whole schema
+db/schema.sql   the core schema (services.sql and finance.sql add to it)
 lib/            db, auth, inventory, orders, money, jobs, settings, i18n, server actions
 tests/          concurrency and release tests
 ```
@@ -84,4 +88,5 @@ These are in the SRS but need accounts, vendors or decisions first. The code has
 - **Logistics depth**: no collection-point intake, weighing and weight-variance repricing, route board, or partner payouts yet. Sub-orders double as delivery tasks.
 - **Ledger and invoices**: no double-entry ledger, GST invoices or reconciliation report yet. Receipts print to PDF from the order page. The finance module is planned under `app/admin/finance`.
 - **Not in this MVP**: field-agent assisted mode, curated baskets, subscriptions and standing orders, coupons and wallet, counter-offers, automatic re-sourcing when a farmer rejects (ops is alerted and the line is refunded), B2B staff limits, delivery zones as polygons, native Flutter apps.
+- **Farm services next steps**: online payment and owner payouts for machine rental (today the renter pays the owner directly), dealer self-service logins for the inputs shop, a group lead hand-over flow, turning a pooled lot into a business offer in one step, soil testing and crop advisory.
 - **Security before launch**: admin password + OTP, rate limits beyond OTP, CSP headers, penetration test.

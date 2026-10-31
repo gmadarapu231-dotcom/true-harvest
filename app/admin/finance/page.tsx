@@ -1,176 +1,159 @@
 import Link from 'next/link';
-import { query } from '@/lib/db';
-import AdminNav from '@/components/AdminNav';
-import { Flash, PageHead, Stat } from '@/components/ui';
-import { alerts, balances, CATEGORIES, compact, filterOptions, filtersFrom, getFinanceSettings, inr, monthKey, monthLabel, monthStatement, shiftMonth, type Month } from '@/lib/finance';
-import FinanceNav, { FilterBar } from './FinanceNav';
+import { Suspense } from 'react';
+import { Chip, Flash } from '@/components/ui';
+import {
+  alerts, balances, compact, filterOptions, filtersFrom, inr, monthStatement, ordersForMonth, periodFrom, periodLabel, periodRange,
+  previousPeriod, settlementPanel, type OrderEcon,
+} from '@/lib/finance';
+import FinanceHeader from './FinanceHeader';
+import { BarChart, LineChart } from './charts';
 import { requireFinance } from './guard';
-import { saveFinanceSettings, setFinanceRole } from './actions';
 
-export const metadata = { title: 'Finance · Ops' };
+export const metadata = { title: 'Finance Control Center' };
 
-function change(cur: number, prev: number, lowerIsBetter = false) {
-  if (!prev) return 'no previous month';
-  const c = (cur - prev) / Math.abs(prev);
-  const good = lowerIsBetter ? c <= 0 : c >= 0;
-  return `${c >= 0 ? '▲' : '▼'} ${Math.abs(c * 100).toFixed(1)}% vs last month${Math.abs(c) > 0.005 ? (good ? '' : ' ⚠') : ''}`;
+function Kpi({ label, value, cur, prev, dark, tag, lowerIsBetter, href }: { label: string; value: number; cur: number; prev: number; dark?: boolean; tag?: string; lowerIsBetter?: boolean; href?: string }) {
+  let chg = <span className="chg">No earlier period to compare</span>;
+  if (prev) {
+    const c = (cur - prev) / Math.abs(prev);
+    const good = lowerIsBetter ? c <= 0 : c >= 0;
+    chg = <span className={`chg ${good ? 'good' : 'bad'}`}>{c >= 0 ? '+' : '−'}{Math.abs(c * 100).toFixed(1)}% vs previous</span>;
+  }
+  const body = <><span className="lbl">{label}</span><span className="val">{compact(value)}</span>{chg}{tag ? <span className="tag">{tag}</span> : null}</>;
+  return href ? <Link href={href} className={`fin-kpi ${dark ? 'dark' : 'light'}`}>{body}</Link> : <div className={`fin-kpi ${dark ? 'dark' : 'light'}`}>{body}</div>;
+}
+
+/** Splits a period into whole weeks counted back from its end; leftover days join the first week, so no week is a stub. */
+function weekly(orders: OrderEcon[], from: string, to: string) {
+  const end = Date.parse(to), wk = 7 * 86400000;
+  const n = Math.max(1, Math.floor((end - Date.parse(from)) / wk));
+  const b2c = Array(n).fill(0), b2b = Array(n).fill(0);
+  for (const o of orders) {
+    const back = Math.floor((end - 1 - Date.parse(String(o.completed_at))) / wk);
+    const i = Math.max(0, n - 1 - Math.max(0, back));
+    (o.channel === 'b2c' ? b2c : b2b)[i] += o.contribution;
+  }
+  return { labels: Array.from({ length: n }, (_, i) => `Week ${i + 1}`), b2c, b2b };
+}
+
+function Equation({ who, avg, parts }: { who: string; avg: string; parts: { k: string; v: number; tone: string; op?: string }[] }) {
+  const result = parts[parts.length - 1];
+  return (
+    <div className="fin-eq">
+      <div className="who">{who}<small>({avg} avg)</small></div>
+      {parts.map((p, i) => (
+        <span key={p.k} style={{ display: 'contents' }}>
+          {i > 0 && <span className="op">{p.op}</span>}
+          <span className={`t ${p.tone}${p === result && p.v < 0 ? ' neg' : ''}`}><span>{p.k}</span><b>{inr(p.v)}</b></span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default async function FinanceOverview({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const { user, role } = await requireFinance('overview');
+  await requireFinance('overview');
   const sp = await searchParams;
-  const m = /^\d{4}-\d{2}$/.test(sp.m ?? '') ? sp.m : monthKey();
+  const p = periodFrom(sp);
   const f = filtersFrom(sp);
-  const filtered = !!(f.channel || f.state || f.district);
-  const [cur, prev, opts, bal, fs] = await Promise.all([monthStatement(m, f), monthStatement(shiftMonth(m, -1), f), filterOptions(), balances(), getFinanceSettings()]);
-  const history: Month[] = await Promise.all(Array.from({ length: 6 }, (_, i) => monthStatement(shiftMonth(m, i - 5), f)));
+  const filtered = !!(f.channel || f.state || f.district || f.crop);
+  const [from, to] = periodRange(p);
+  const [cur, prev, opts, bal, orders, st] = await Promise.all([
+    monthStatement(p, f), monthStatement(previousPeriod(p), f), filterOptions(), balances(), ordersForMonth(p, f), settlementPanel(p)]);
   const warn = await alerts(cur, bal);
-  const admins = role === 'founder'
-    ? await query("SELECT u.id, u.name, u.phone, coalesce(fr.role,'founder') AS role FROM users u LEFT JOIN finance_roles fr ON fr.user_id=u.id WHERE u.role='admin' ORDER BY u.name")
-    : [];
-  const g = cur.gmv || 1;
-  const per100 = (v: number) => `${v < 0 ? '−' : ''}₹${Math.abs(v / g * 100).toFixed(2)}`;
-  const liabilities = bal.farmerDue + bal.accruing;
-
-  const pl: [string, (x: Month) => number, string?][] = [
-    ['GMV (memo, not revenue)', (x) => x.gmv, 'memo'],
-    ['Commission revenue', (x) => x.commission, 'indent'], ['Delivery fees', (x) => x.deliveryFees, 'indent'], ['Packing and grading fees', (x) => x.serviceFees, 'indent'],
-    ['Recognised platform revenue', (x) => x.revenue, 'sub'],
-    ['Delivery partner costs', (x) => -x.partner, 'indent'], ['Packing and handling', (x) => -x.packing, 'indent'], ['Payment gateway fees', (x) => -x.gateway, 'indent'], ['Refunds borne by platform', (x) => -x.refunds, 'indent'],
-    ['Gross profit (contribution)', (x) => x.contribution, 'sub'],
-    ...CATEGORIES.map((c): [string, (x: Month) => number, string] => [`${c} expenses`, (x) => -x.opex[c], 'indent']),
-    ['EBITDA', (x) => x.ebitda, 'sub'], ['Depreciation', (x) => -x.depreciation, 'indent'], ['Profit before tax', (x) => x.pbt, 'sub'],
-    [`Income tax (${(fs.tax_rate * 100).toFixed(2)}%)`, (x) => -x.tax, 'indent'], ['Net profit after tax', (x) => x.npat, 'total'],
-  ];
+  const wk = weekly(orders, from, to);
+  const avg = (list: OrderEcon[], fn: (o: OrderEcon) => number) => (list.length ? list.reduce((t, o) => t + fn(o), 0) / list.length : 0);
+  const c = orders.filter((o) => o.channel === 'b2c'), b = orders.filter((o) => o.channel === 'b2b');
+  const qs = new URLSearchParams(Object.entries(sp).filter(([k]) => ['p', 'st', 'ch', 'crop', 'd'].includes(k))).toString();
+  const pct = (v: number) => (cur.gmv ? `${Math.round((v / cur.gmv) * 100)}%` : '0%');
 
   return (
-    <main className="wrap">
-      <AdminNav current="/admin/finance" />
-      <FinanceNav current="/admin/finance" role={role} />
-      <PageHead title="Finance overview" sub={`${monthLabel(m)}${m === monthKey() ? ', month to date' : ''}. GMV, revenue, contribution and profit are kept separate: produce sold is not money earned.`} />
+    <>
+      <Suspense><FinanceHeader title="Finance Control Center" exportReport="orders" {...opts}
+        sub={<>{periodLabel(p)} · {cur.n} completed orders{filtered ? ` · fixed costs allocated by revenue share (${(cur.share * 100).toFixed(1)}%)` : ''}. Every figure traces to orders, settlements and approved expenses.</>} /></Suspense>
       <Flash sp={sp} />
-      <FilterBar path="/admin/finance" sp={{ ...sp, m }} {...opts} />
-      <p className="small muted">Every figure comes from {cur.n} completed orders{filtered ? ` matching the filters; fixed costs are allocated by revenue share (${(cur.share * 100).toFixed(1)}%)` : ''} and approved expenses. Click a tile to see its records.</p>
 
-      <div className="stats">
-        <Stat label="Total GMV" value={compact(cur.gmv)} hint={change(cur.gmv, prev.gmv)} href={`/admin/finance/orders?m=${m}`} />
-        <Stat label="Platform revenue" value={compact(cur.revenue)} hint={change(cur.revenue, prev.revenue)} href={`/admin/finance/orders?m=${m}`} />
-        <Stat label="Contribution" value={compact(cur.contribution)} hint={`${cur.revenue ? (cur.contribution / cur.revenue * 100).toFixed(1) : 0}% of revenue · ${change(cur.contribution, prev.contribution)}`} href={`/admin/finance/orders?m=${m}`} />
-        <Stat label="Net profit after tax" value={compact(cur.npat)} hint={change(cur.npat, prev.npat)} />
-        <Stat label="Marketplace commission" value={compact(cur.commission)} hint={`Take rate ${cur.gmv ? (cur.commission / cur.gmv * 100).toFixed(2) : 0}% of GMV`} />
-        <Stat label="Logistics revenue" value={compact(cur.deliveryFees)} hint={change(cur.deliveryFees, prev.deliveryFees)} />
-        <Stat label="Service revenue" value={compact(cur.serviceFees)} hint="Packing and grading fees" />
-        <Stat label="Variable costs" value={compact(cur.variable)} hint={change(cur.variable, prev.variable, true)} href={`/admin/finance/orders?m=${m}`} />
-        <Stat label="Operating expenses" value={compact(cur.opexTotal)} hint={change(cur.opexTotal, prev.opexTotal, true)} href="/admin/finance/expenses" />
-        <Stat label="EBITDA" value={compact(cur.ebitda)} hint={change(cur.ebitda, prev.ebitda)} />
-        <Stat label="Bank balance (estimated)" value={compact(bal.bank)} hint="Includes money held for farmers" />
-        <Stat label="Company cash (own)" value={compact(bal.ownCash)} hint="Bank minus collected farmer money" />
-        <Stat label="Farmer payments pending" value={compact(bal.farmerDue)} hint={`${bal.overdueN} overdue · ${compact(bal.accruing)} accruing`} href="/admin/settlements" />
-        <Stat label="Business receivables" value={compact(bal.receivables)} hint="Delivered, not yet paid" href="/admin/orders" />
-        <Stat label="Outstanding liabilities" value={compact(liabilities)} hint="Farmer payouts due + accruing" href="/admin/settlements" />
+      <h2 className="fin-section">Executive KPI cards</h2>
+      <div className="fin-kpis">
+        <Kpi dark label="Total GMV" value={cur.gmv} cur={cur.gmv} prev={prev.gmv} tag="Gross merchandise value" href={`/admin/finance/orders?${qs}`} />
+        <Kpi label="Platform revenue" value={cur.revenue} cur={cur.revenue} prev={prev.revenue} tag="Commission + fees" href={`/admin/finance/revenue?${qs}`} />
+        <Kpi label="Variable costs" value={cur.variable} cur={cur.variable} prev={prev.variable} lowerIsBetter tag="Delivery, packing, gateway" href={`/admin/finance/logistics?${qs}`} />
+        <Kpi dark label="Gross contribution" value={cur.contribution} cur={cur.contribution} prev={prev.contribution} tag="Revenue − direct costs" href={`/admin/finance/orders?${qs}`} />
+        <Kpi dark label="Operating profit (EBITDA)" value={cur.ebitda} cur={cur.ebitda} prev={prev.ebitda} tag="Contribution − operating expenses" href={`/admin/finance/pnl?${qs}`} />
       </div>
 
-      <div className="grid2">
-        <div className="card">
-          <h2>Where ₹100 of GMV goes</h2>
-          <dl className="kv">
-            <dt>Paid to farmers</dt><dd className="num">{per100(cur.gmv - cur.commission)}</dd>
-            <dt>Commission kept</dt><dd className="num">{per100(cur.commission)}</dd>
-            <dt>Fees charged on top</dt><dd className="num">+{per100(cur.deliveryFees + cur.serviceFees)}</dd>
-            <dt>Variable costs</dt><dd className="num">{per100(-cur.variable)}</dd>
-            <dt><b>Contribution</b></dt><dd className="num"><b>{per100(cur.contribution)}</b></dd>
-            <dt>Fixed costs and tax</dt><dd className="num">{per100(-(cur.opexTotal + cur.depreciation + cur.tax))}</dd>
-            <dt><b>Net profit</b></dt><dd className="num"><b>{per100(cur.npat)}</b></dd>
-          </dl>
+      <h2 className="fin-section">Graphical analysis</h2>
+      <div className="fin-grid">
+        <div className="fin-card">
+          <h3>GMV composition</h3>
+          <BarChart bars={[{ label: 'B2B', value: cur.gmvB2B, color: 'var(--green)' }, { label: 'B2C', value: cur.gmvB2C, color: 'var(--fin-gold)' }]} />
+          <div className="fin-legend" style={{ marginTop: 6 }}>
+            <span><i style={{ background: 'var(--green)' }} />B2B GMV: {compact(cur.gmvB2B)} ({pct(cur.gmvB2B)})</span>
+            <span><i style={{ background: 'var(--fin-gold)' }} />B2C GMV: {compact(cur.gmvB2C)} ({pct(cur.gmvB2C)})</span>
+          </div>
         </div>
-        <div className="card">
-          <h2>Alerts</h2>
+        <div className="fin-card">
+          <h3>Contribution by sales channel
+            <span className="fin-legend"><span><i className="line" style={{ background: 'var(--green)' }} />B2B contribution</span><span><i className="line" style={{ background: 'var(--fin-gold)' }} />B2C contribution</span></span>
+          </h3>
+          <LineChart labels={wk.labels} series={[{ name: 'B2B contribution', color: 'var(--green)', values: wk.b2b }, { name: 'B2C contribution', color: 'var(--fin-gold)', values: wk.b2c }]} />
+          <p className="small muted" style={{ margin: '6px 0 0' }}>Weekly, by order completion date. Period total: B2B {inr(cur.cB2B)}, B2C {inr(cur.cB2C)}.</p>
+        </div>
+      </div>
+
+      <h2 className="fin-section">Financial and fulfilment details</h2>
+      <div className="fin-grid half">
+        <div className="fin-card">
+          <h3>Farmer settlement status <Link href="/admin/settlements" className="small">Pay farmers</Link></h3>
+          <div className="fin-split">
+            <div><div className="k">Pending settlements</div><div className="v">{compact(bal.farmerDue)}{bal.overdueN ? <span className="fin-flag bad">{bal.overdueN} overdue</span> : null}</div></div>
+            <div><div className="k">Paid this period</div><div className="v">{compact(st.paid)}</div></div>
+            <div><div className="k">In complaint window</div><div className="v">{compact(bal.accruing)}</div></div>
+          </div>
+          <div className="table-wrap" style={{ border: 0 }}><table>
+            <thead><tr><th>Recent payouts</th><th className="r">Payout</th><th>Status</th></tr></thead>
+            <tbody>{st.recent.length ? st.recent.map((r: any, i: number) => (
+              <tr key={i}><td>{r.name}{r.state ? ` (${r.state === 'Telangana' ? 'TG' : 'AP'})` : ''}</td><td className="r num">{inr(Number(r.amount))}</td>
+                <td><Chip s={r.status === 'Paid' ? 'paid' : r.status === 'On hold' ? 'rejected' : 'pending'} label={r.status} /></td></tr>
+            )) : <tr><td colSpan={3} className="muted">No payouts yet.</td></tr>}</tbody>
+          </table></div>
+        </div>
+        <div className="fin-card">
+          <h3>Order economics <Link href={`/admin/finance/orders?${qs}`} className="small">All orders</Link></h3>
+          <Equation who="B2C order" avg={inr(avg(c, (o) => o.gmv))} parts={[
+            { k: 'Comm', v: avg(c, (o) => o.commission), tone: 'mint' }, { k: 'Deliv', v: avg(c, (o) => o.delivery_fee), tone: 'sand', op: '+' },
+            { k: 'Pack', v: avg(c, (o) => o.service_fee), tone: 'sand', op: '+' }, { k: 'Cost', v: avg(c, (o) => o.variable), tone: 'rose', op: '−' },
+            { k: 'Contribution', v: avg(c, (o) => o.contribution), tone: 'result', op: '=' }]} />
+          <Equation who="B2B order" avg={inr(avg(b, (o) => o.gmv))} parts={[
+            { k: 'Comm', v: avg(b, (o) => o.commission), tone: 'mint' }, { k: 'Log', v: avg(b, (o) => o.delivery_fee), tone: 'sand', op: '+' },
+            { k: 'Serv', v: avg(b, (o) => o.service_fee), tone: 'sand', op: '+' }, { k: 'Cost', v: avg(b, (o) => o.variable), tone: 'rose', op: '−' },
+            { k: 'Contribution', v: avg(b, (o) => o.contribution), tone: 'result', op: '=' }]} />
+          <p className="small muted" style={{ margin: '6px 0 0' }}>Average per completed order: {c.length} household and {b.length} business orders. Cost = delivery partner + packing + gateway + refunds the platform bears.</p>
+        </div>
+      </div>
+
+      <h2 className="fin-section">Cash and alerts</h2>
+      <div className="fin-grid even">
+        <div className="fin-card">
+          <h3>Alerts</h3>
           {warn.map((a, i) => (
-            <div key={i} className="row small" style={{ justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-              <span><span className={`chip chip-${a.level === 'ok' ? 'ok' : a.level}`}>{a.level === 'bad' ? 'Act now' : a.level === 'warn' ? 'Check' : 'OK'}</span> {a.text}</span>
+            <div key={i} className="row small" style={{ justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+              <span><span className={`chip chip-${a.level}`}>{a.level === 'bad' ? 'Act now' : a.level === 'warn' ? 'Check' : 'OK'}</span> {a.text}</span>
               {a.href ? <Link href={a.href}>Open</Link> : null}
             </div>
           ))}
         </div>
-        <div className="card">
-          <h2>Contribution by channel</h2>
-          <div className="bars">
-            {([['Households', cur.cB2C, cur.nB2C], ['Businesses', cur.cB2B, cur.nB2B]] as const).map(([l, v, n]) => {
-              const max = Math.max(1, Math.abs(cur.cB2C), Math.abs(cur.cB2B));
-              return <div key={l} className="bar"><span>{l}</span><span className="track"><span className="fill" style={{ display: 'block', width: `${Math.abs(v) / max * 100}%`, background: v < 0 ? 'var(--chilli)' : undefined }} /></span><span className="num r">{compact(v)}</span></div>;
-            })}
-          </div>
-          <p className="small muted" style={{ marginTop: 10 }}>
-            Per order: households {inr(cur.nB2C ? cur.cB2C / cur.nB2C : 0, 1)} ({cur.nB2C} orders), businesses {inr(cur.nB2B ? cur.cB2B / cur.nB2B : 0)} ({cur.nB2B} orders).
-          </p>
-        </div>
-        <div className="card">
-          <h2>Cash position</h2>
+        <div className="fin-card">
+          <h3>Cash position <Link href="/admin/finance/pnl#assumptions" className="small">Opening balance</Link></h3>
           <dl className="kv">
-            <dt>Opening balance ({bal.openingDate})</dt><dd className="num">{inr(bal.openingCash)}</dd>
-            <dt>Collected from buyers</dt><dd className="num">+{inr(bal.collected)}</dd>
-            <dt>Paid to farmers</dt><dd className="num">−{inr(bal.farmersPaid)}</dd>
-            <dt>Delivery, packing, gateway</dt><dd className="num">−{inr(bal.orderCosts)}</dd>
-            <dt>Expenses paid</dt><dd className="num">−{inr(bal.expensesPaid)}</dd>
-            <dt><b>Estimated bank balance</b></dt><dd className="num"><b>{inr(bal.bank)}</b></dd>
+            <dt>Estimated bank balance</dt><dd className="num"><b>{inr(bal.bank)}</b></dd>
             <dt>Held for farmers</dt><dd className="num">−{inr(bal.heldForFarmers)}</dd>
-            <dt><b>Company cash (own)</b></dt><dd className="num"><b>{inr(bal.ownCash)}</b></dd>
+            <dt>Company cash (own)</dt><dd className="num"><b className={bal.ownCash < bal.reserve ? 'neg' : ''}>{inr(bal.ownCash)}</b></dd>
+            <dt>Minimum reserve</dt><dd className="num">{inr(bal.reserve)}</dd>
+            <dt>Business receivables</dt><dd className="num"><Link href="/admin/finance/receivables">{inr(bal.receivables)}</Link></dd>
           </dl>
-          <p className="small muted" style={{ marginTop: 8 }}>Estimated from recorded money movements. Reconcile against the bank statement each month.</p>
+          <p className="small muted" style={{ margin: '8px 0 0' }}>Estimated from recorded money movements since {bal.openingDate}. Reconcile with the bank statement each month.</p>
         </div>
       </div>
-
-      <section className="section">
-        <div className="section-head"><h2>Profit and loss</h2><span className="small muted">Accrual basis, completed orders, approved expenses</span></div>
-        <div className="table-wrap"><table>
-          <thead><tr><th></th>{history.map((h) => <th key={h.m} className="r">{monthLabel(h.m)}</th>)}</tr></thead>
-          <tbody>{pl.map(([label, fn, cls]) => (
-            <tr key={label} style={cls === 'sub' || cls === 'total' ? { fontWeight: 700, background: '#f6f3ea' } : cls === 'memo' ? { color: 'var(--ink-2)', fontStyle: 'italic' } : undefined}>
-              <td style={cls === 'indent' ? { paddingLeft: 26 } : undefined}>{label}</td>
-              {history.map((h) => { const v = fn(h); return <td key={h.m} className="r num" style={v < 0 ? { color: 'var(--chilli)' } : undefined}>{inr(v)}</td>; })}
-            </tr>
-          ))}</tbody>
-        </table></div>
-        <p className="small muted" style={{ marginTop: 8 }}>GMV is a memo line. The company acts as the farmers&apos; agent, so only its commission and its own service fees are revenue. Confirm this treatment with the chartered accountant before filing.</p>
-      </section>
-
-      <div className="grid2 section">
-        <form action={saveFinanceSettings} className="card form">
-          <h2>Finance assumptions</h2>
-          <div className="grid2">
-            <label>Opening bank balance (₹)<input name="opening_cash" type="number" step="1" min="0" defaultValue={fs.opening_cash} /></label>
-            <label>Balance date<input name="opening_cash_date" type="date" defaultValue={fs.opening_cash_date} /></label>
-            <label>Minimum cash reserve (₹)<input name="min_cash_reserve" type="number" min="0" defaultValue={fs.min_cash_reserve} /></label>
-            <label>Depreciation per month (₹)<input name="depreciation_monthly" type="number" min="0" defaultValue={fs.depreciation_monthly} /></label>
-            <label>Household delivery cost per drop (₹)<input name="b2c_partner_cost_per_drop" type="number" step="0.5" min="0" defaultValue={fs.b2c_partner_cost_per_drop} /></label>
-            <label>Business transport cost per kg (₹)<input name="b2b_partner_cost_per_kg" type="number" step="0.01" min="0" defaultValue={fs.b2b_partner_cost_per_kg} /></label>
-            <label>Household packing cost (₹/order)<input name="b2c_packing_cost" type="number" step="0.5" min="0" defaultValue={fs.b2c_packing_cost} /></label>
-            <label>Business handling cost per kg (₹)<input name="b2b_handling_cost_per_kg" type="number" step="0.01" min="0" defaultValue={fs.b2b_handling_cost_per_kg} /></label>
-            <label>Gateway fee (fraction of online payment)<input name="gateway_fee_pct" type="number" step="0.001" min="0" defaultValue={fs.gateway_fee_pct} /></label>
-            <label>Settlement due after (days)<input name="settlement_sla_days" type="number" min="0" defaultValue={fs.settlement_sla_days} /></label>
-          </div>
-          <p className="small muted">Standard costs apply only to orders with no actual cost recorded yet.</p>
-          <button className="btn">Save assumptions</button>
-        </form>
-        {role === 'founder' && (
-          <div className="card">
-            <h2>Who can see finance</h2>
-            <p className="small muted">Founder and finance see everything. Operations and sales see order economics only.</p>
-            {admins.map((a) => (
-              <form key={a.id} action={setFinanceRole} className="row" style={{ justifyContent: 'space-between', padding: '6px 0' }}>
-                <input type="hidden" name="user_id" value={a.id} />
-                <span>{a.name || a.phone}{a.id === user.id ? ' (you)' : ''}</span>
-                <span className="row">
-                  <select name="role" defaultValue={a.role} aria-label={`Finance role for ${a.name}`}>
-                    <option value="founder">Founder / admin</option><option value="finance">Finance manager</option><option value="ops">Operations manager</option><option value="sales">Sales manager</option>
-                  </select>
-                  <button className="btn btn-ghost btn-sm">Save</button>
-                </span>
-              </form>
-            ))}
-          </div>
-        )}
-      </div>
-    </main>
+    </>
   );
 }

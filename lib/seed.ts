@@ -174,6 +174,12 @@ export async function seedIfEmpty(db: Queryable & { tx<T>(fn: (q: Queryable) => 
     ];
     for (const [c, market, min, max, modal] of mandi) {
       await q.query('INSERT INTO mandi_prices (crop_id, market, date, min_price, max_price, modal_price) VALUES ($1,$2,current_date,$3,$4,$5)', [await crop(c), market, min, max, modal]);
+      // Four weeks of history so the price-trend charts have something to draw: a gentle seasonal swing ending at today's rate.
+      for (let d = 1; d <= 28; d++) {
+        const f = 1 - 0.07 * Math.sin(d / 4) - 0.0025 * d + 0.02 * Math.sin(d * 1.7);
+        await q.query('INSERT INTO mandi_prices (crop_id, market, date, min_price, max_price, modal_price) VALUES ($1,$2,current_date - $3::int,$4,$5,$6)',
+          [await crop(c), market, d, Math.round(min * f), Math.round(max * f), Math.round(modal * f)]);
+      }
     }
     await q.query("INSERT INTO notifications (user_id, title, body, link) VALUES ($1, 'New order to accept', 'Order from Kondapur: 3 kg Mango, 2 kg Banana.', '/farmer/orders')", [fid['Padmavathi K']]);
   });

@@ -39,5 +39,5 @@ export async function farmerStorefront(id: number) {
 }
 
 export async function latestMandi(cropId: number) {
-  return query('SELECT market, date, min_price, max_price, modal_price FROM mandi_prices WHERE crop_id=$1 ORDER BY date DESC, market LIMIT 3', [cropId]);
+  return query('SELECT * FROM (SELECT DISTINCT ON (market) market, date, min_price, max_price, modal_price FROM mandi_prices WHERE crop_id=$1 ORDER BY market, date DESC) x ORDER BY date DESC, market LIMIT 3', [cropId]);
 }

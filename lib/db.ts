@@ -75,6 +75,10 @@ async function init(): Promise<Driver> {
   await driver.exec(schema);
   const { seedIfEmpty } = await import('./seed');
   await seedIfEmpty(driver);
+  // Farmer services (catalogue, rentals, inputs, crop groups). Applied after the core seed, which checks for an empty crops table.
+  await driver.exec(fs.readFileSync(path.join(process.cwd(), 'db', 'services.sql'), 'utf8'));
+  const { seedServicesIfEmpty } = await import('./seed-services');
+  await seedServicesIfEmpty(driver);
   return driver;
 }
 

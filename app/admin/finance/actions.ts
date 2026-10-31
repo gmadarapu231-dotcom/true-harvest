@@ -5,7 +5,7 @@ import { back, int, num, str } from '@/lib/http';
 import { audit } from '@/lib/notify';
 import { CATEGORIES, DEFAULT_FINANCE_SETTINGS, canSee, financeRole, getFinanceSettings, saveFinanceSetting, type FinanceSettings } from '@/lib/finance';
 
-async function finance(section: 'expenses' | 'overview' | 'roles') {
+async function finance(section: 'expenses' | 'pnl' | 'roles') {
   const u = await requireUser('admin');
   const role = await financeRole(u.id);
   if (!canSee(role, section)) back('/admin/finance', 'Your finance role does not allow this.');
@@ -58,7 +58,7 @@ export async function saveBudgets(fd: FormData) {
 }
 
 export async function saveFinanceSettings(fd: FormData) {
-  const u = await finance('overview');
+  const u = await finance('pnl');
   const before = await getFinanceSettings();
   await tx(async (q) => {
     for (const key of Object.keys(DEFAULT_FINANCE_SETTINGS) as (keyof FinanceSettings)[]) {
@@ -71,21 +71,21 @@ export async function saveFinanceSettings(fd: FormData) {
       await audit(q, u.id, 'finance_setting.update', 'finance_setting', key, before[key], v);
     }
   });
-  back('/admin/finance', null, 'Finance assumptions saved.');
+  back('/admin/finance/pnl', null, 'Finance assumptions saved.');
 }
 
 export async function setFinanceRole(fd: FormData) {
   const u = await finance('roles');
   const id = int(fd, 'user_id');
   const role = str(fd, 'role');
-  if (!['founder', 'finance', 'ops', 'sales'].includes(role)) back('/admin/finance', 'Unknown role.');
+  if (!['founder', 'finance', 'ops', 'sales'].includes(role)) back('/admin/finance/pnl', 'Unknown role.');
   const [target] = await query("SELECT id FROM users WHERE id=$1 AND role='admin'", [id]);
-  if (!target) back('/admin/finance', 'Finance roles apply to admin staff only.');
-  if (id === u.id && role !== 'founder') back('/admin/finance', 'You cannot remove your own founder access.');
+  if (!target) back('/admin/finance/pnl', 'Finance roles apply to admin staff only.');
+  if (id === u.id && role !== 'founder') back('/admin/finance/pnl', 'You cannot remove your own founder access.');
   await tx(async (q) => {
     await q.query(`INSERT INTO finance_roles (user_id, role, granted_by) VALUES ($1,$2,$3)
                    ON CONFLICT (user_id) DO UPDATE SET role=EXCLUDED.role, granted_by=EXCLUDED.granted_by, granted_at=now()`, [id, role, u.id]);
     await audit(q, u.id, 'finance_role.set', 'user', id, '', role);
   });
-  back('/admin/finance', null, 'Finance access updated.');
+  back('/admin/finance/pnl', null, 'Finance access updated.');
 }

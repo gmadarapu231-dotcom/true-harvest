@@ -1,5 +1,5 @@
 // Minimal offline support: network first for pages, cache fallback; static assets cache first.
-const CACHE = 'farmora-v1';
+const CACHE = 'trueharvest-v2';
 const OFFLINE = '/offline.html';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll([OFFLINE, '/icon.svg', '/icon-192.png'])));

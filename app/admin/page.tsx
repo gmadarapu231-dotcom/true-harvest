@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { runJobs } from '@/lib/jobs';
 import AdminNav from '@/components/AdminNav';
-import { Chip, PageHead, Stat, fmtMoney, fmtKg, fmtTime } from '@/components/ui';
+import { Chip, LineChart, PageHead, Stat, fmtMoney, fmtKg, fmtTime } from '@/components/ui';
 
 export const metadata = { title: 'Operations' };
 
@@ -37,8 +37,8 @@ export default async function AdminHome() {
       WHERE s.status='awaiting_acceptance' AND o.status <> 'pending_payment' ORDER BY s.accept_deadline LIMIT 8`);
   const days = await query(
     `SELECT d::date AS day, coalesce((SELECT sum(items_total) FROM orders o WHERE o.created_at::date = d::date AND o.status NOT IN ('cancelled','payment_failed','pending_payment')),0) AS gmv
-       FROM generate_series(current_date - 6, current_date, interval '1 day') d ORDER BY d`);
-  const maxG = Math.max(1, ...days.map((d) => Number(d.gmv)));
+       FROM generate_series(current_date - 29, current_date, interval '1 day') d ORDER BY d`);
+  const gmv30 = days.reduce((a, d) => a + Number(d.gmv), 0);
   const shortage = await query(
     `SELECT c.name, fp.district, sum(l.listed_kg - l.reserved_kg - l.confirmed_kg - l.delivered_kg - l.rejected_kg - l.spoiled_kg - l.removed_kg) AS sellable, sum(l.reserved_kg + l.confirmed_kg) AS held
        FROM listings l JOIN crops c ON c.id=l.crop_id JOIN farmer_profiles fp ON fp.user_id=l.farmer_id
@@ -48,14 +48,18 @@ export default async function AdminHome() {
       <AdminNav current="/admin" />
       <PageHead title="Operations overview" sub={`As of ${fmtTime(new Date())}`} />
       <div className="stats">
-        <Stat label="GMV today" value={fmtMoney(k.gmv_today)} hint={`${k.orders_today} orders`} href="/admin/orders" />
-        <Stat label="Awaiting farmer" value={k.awaiting} hint={`${k.unassigned} accepted without a partner`} href="/admin/orders?status=awaiting_acceptance" />
-        <Stat label="Open complaints" value={k.complaints} href="/admin/complaints" />
-        <Stat label="Settlements due" value={fmtMoney(k.due)} href="/admin/settlements" />
-        <Stat label="Farmers to verify" value={k.to_verify} href="/admin/farmers?status=submitted" />
-        <Stat label="Listings to review" value={k.to_review} href="/admin/listings" />
-        <Stat label="Commission earned" value={fmtMoney(k.commission)} />
-        <Stat label="Delivery + packing fees" value={fmtMoney(k.fees)} />
+        <Stat icon="chart" label="GMV today" value={fmtMoney(k.gmv_today)} hint={`${k.orders_today} orders`} href="/admin/orders" />
+        <Stat icon="farmer" label="Awaiting farmer" value={k.awaiting} hint={`${k.unassigned} accepted without a partner`} href="/admin/orders?status=awaiting_acceptance" />
+        <Stat icon="complaint" label="Open complaints" value={k.complaints} href="/admin/complaints" />
+        <Stat icon="rupee" label="Settlements due" value={fmtMoney(k.due)} href="/admin/settlements" />
+        <Stat icon="shield" label="Farmers to verify" value={k.to_verify} href="/admin/farmers?status=submitted" />
+        <Stat icon="wheat" label="Listings to review" value={k.to_review} href="/admin/listings" />
+        <Stat icon="wallet" label="Commission earned" value={fmtMoney(k.commission)} />
+        <Stat icon="truck" label="Delivery + packing fees" value={fmtMoney(k.fees)} />
+      </div>
+      <div className="card chart-card">
+        <div className="section-head"><h2>GMV, last 30 days</h2><span className="small muted num">{fmtMoney(gmv30)} total</span></div>
+        <LineChart points={days.map((d) => ({ label: new Date(d.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }), value: Number(d.gmv) }))} fmt={(v) => (v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${Math.round(v)}`)} />
       </div>
       <div className="grid2">
         <div className="card">
@@ -66,14 +70,6 @@ export default async function AdminHome() {
               <span className="row"><span className="num">{fmtMoney(w.items_total)}</span><Chip s={w.mins < 15 ? 'rejected' : 'pending'} label={`${w.mins} min left`} /></span>
             </div>
           ))}
-        </div>
-        <div className="card">
-          <h2>GMV, last 7 days</h2>
-          <div className="bars">
-            {days.map((d) => (
-              <div key={String(d.day)} className="bar"><span>{new Date(d.day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}</span><span className="track"><span className="fill" style={{ display: 'block', width: `${(Number(d.gmv) / maxG) * 100}%` }} /></span><span className="num r">{fmtMoney(d.gmv)}</span></div>
-            ))}
-          </div>
         </div>
         <div className="card">
           <h2>KPIs</h2>

@@ -60,7 +60,12 @@ export async function saveFinanceSetting(q: Queryable, key: keyof FinanceSetting
 export type FinanceRole = 'founder' | 'finance' | 'ops' | 'sales';
 export const SECTION_ROLES: Record<string, FinanceRole[]> = {
   overview: ['founder', 'finance'],
+  revenue: ['founder', 'finance', 'sales'],
+  settlements: ['founder', 'finance'],
+  receivables: ['founder', 'finance', 'sales'],
+  logistics: ['founder', 'finance', 'ops'],
   orders: ['founder', 'finance', 'ops', 'sales'],
+  pnl: ['founder', 'finance'],
   expenses: ['founder', 'finance'],
   simulator: ['founder', 'finance'],
   roles: ['founder'],
@@ -83,12 +88,24 @@ export function shiftMonth(m: string, by: number): string {
   const [y, mo] = m.split('-').map(Number);
   return new Date(Date.UTC(y, mo - 1 + by, 1)).toISOString().slice(0, 7);
 }
+/** A period is a month ('2026-10') or a rolling window ('last30', and 'prev30' for the 30 days before it). */
+export function periodRange(p: string): [string, string] {
+  if (p === 'last30' || p === 'prev30') {
+    const end = new Date(); end.setUTCHours(0, 0, 0, 0); end.setUTCDate(end.getUTCDate() + 1 - (p === 'prev30' ? 30 : 0));
+    const start = new Date(end); start.setUTCDate(start.getUTCDate() - 30);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  return monthRange(p);
+}
+export const previousPeriod = (p: string) => (p === 'last30' ? 'prev30' : shiftMonth(p, -1));
+export const periodFrom = (sp: Record<string, string>) => (sp.p === 'last30' || /^\d{4}-\d{2}$/.test(sp.p ?? '') ? sp.p : sp.m && /^\d{4}-\d{2}$/.test(sp.m) ? sp.m : 'last30');
+export const periodLabel = (p: string) => (p === 'last30' ? 'Last 30 days' : p === 'prev30' ? 'Previous 30 days' : monthLabel(p));
 export const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 /* ---------- order economics ---------- */
-export interface Filters { channel?: string; state?: string; district?: string }
+export interface Filters { channel?: string; state?: string; district?: string; crop?: string }
 export interface OrderEcon {
-  id: number; order_no: string; channel: 'b2c' | 'b2b'; completed_at: string; state: string; district: string; farmers: string; crops: string; kg: number;
+  id: number; order_no: string; channel: 'b2c' | 'b2b'; completed_at: string; state: string; district: string; farmers: string; crops: string; kg: number; partners: string; km: number | null;
   items: number; gmv: number; payout: number; commission: number; delivery_fee: number; service_fee: number; revenue: number;
   partner_cost: number; packing_cost: number; gateway_fee: number; refund_cost: number; variable: number; contribution: number;
   estimated: string[]; // which costs are standard estimates rather than recorded actuals
@@ -104,10 +121,12 @@ const econSql = (where: string) => `
          count(s.id) FILTER (WHERE s.status='delivered')::int AS drops,
          min(fp.state) AS state, min(fp.district) AS district,
          string_agg(DISTINCT u.name, ', ') AS farmers,
+         string_agg(DISTINCT pu.name, ', ') AS partners,
+         sum(s.distance_km) AS distance_km,
          (SELECT string_agg(DISTINCT c.name, ', ') FROM order_lines ol JOIN sub_orders s2 ON s2.id=ol.sub_order_id JOIN listings l ON l.id=ol.listing_id JOIN crops c ON c.id=l.crop_id WHERE s2.order_id=o.id) AS crops,
          (SELECT coalesce(sum(coalesce(ol.delivered_kg, ol.ordered_kg)),0) FROM order_lines ol JOIN sub_orders s2 ON s2.id=ol.sub_order_id WHERE s2.order_id=o.id AND ol.status='delivered') AS kg
     FROM orders o JOIN sub_orders s ON s.order_id=o.id
-    JOIN users u ON u.id=s.farmer_id LEFT JOIN farmer_profiles fp ON fp.user_id=s.farmer_id
+    JOIN users u ON u.id=s.farmer_id LEFT JOIN farmer_profiles fp ON fp.user_id=s.farmer_id LEFT JOIN users pu ON pu.id=s.partner_id
    WHERE ${where}
    GROUP BY o.id ORDER BY 4 DESC`;
 // Older rows (and the demo seed) may be completed without completed_at; fall back to the delivery time.
@@ -132,7 +151,7 @@ export function orderEconomics(r: any, fs: FinanceSettings): OrderEcon {
   const variable = partner + packing + gateway + refundCost;
   const round = (n: number) => Math.round(n * 100) / 100;
   return {
-    id: r.id, order_no: r.order_no, channel: r.channel, completed_at: r.completed_at, state: r.state ?? '', district: r.district ?? '', farmers: r.farmers ?? '', crops: r.crops ?? '', kg,
+    id: r.id, order_no: r.order_no, channel: r.channel, completed_at: r.completed_at, state: r.state ?? '', district: r.district ?? '', farmers: r.farmers ?? '', crops: r.crops ?? '', kg, partners: r.partners ?? '', km: r.distance_km == null ? null : Number(r.distance_km),
     items: Number(r.items_total), gmv: round(gmv), payout: round(gmv - commission), commission: round(commission), delivery_fee: delivery, service_fee: service, revenue: round(revenue),
     partner_cost: round(partner), packing_cost: round(packing), gateway_fee: round(gateway), refund_cost: round(refundCost), variable: round(variable), contribution: round(revenue - variable),
     estimated: est,
@@ -140,11 +159,12 @@ export function orderEconomics(r: any, fs: FinanceSettings): OrderEcon {
 }
 
 const matches = (o: OrderEcon, f: Filters) =>
-  (!f.channel || o.channel === f.channel) && (!f.state || o.state === f.state) && (!f.district || o.district === f.district);
+  (!f.channel || o.channel === f.channel) && (!f.state || o.state === f.state) && (!f.district || o.district === f.district)
+  && (!f.crop || o.crops.split(', ').includes(f.crop));
 
 export async function ordersForMonth(m: string, f: Filters = {}) {
   const fs = await getFinanceSettings();
-  const [a, b] = monthRange(m);
+  const [a, b] = periodRange(m);
   return (await query(ECON_SQL, [a, b])).map((r) => orderEconomics(r, fs)).filter((o) => matches(o, f));
 }
 
@@ -160,21 +180,22 @@ export interface Month {
 export async function monthStatement(m: string, f: Filters = {}): Promise<Month> {
   const fs = await getFinanceSettings();
   const os = await ordersForMonth(m, f);
-  const filtered = !!(f.channel || f.state || f.district);
+  const filtered = !!(f.channel || f.state || f.district || f.crop);
   const s = (fn: (o: OrderEcon) => number, list = os) => list.reduce((t, o) => t + fn(o), 0);
   const b2c = os.filter((o) => o.channel === 'b2c'), b2b = os.filter((o) => o.channel === 'b2b');
   const revenue = s((o) => o.revenue);
   // Fixed costs are company-wide; with filters on they are allocated by the selection's share of revenue.
   let share = 1;
   if (filtered) { const all = await ordersForMonth(m); const tot = all.reduce((t, o) => t + o.revenue, 0); share = tot ? revenue / tot : 0; }
-  const [a, b] = monthRange(m);
+  const [a, b] = periodRange(m);
+  const days = (Date.parse(b) - Date.parse(a)) / 86400000;
   const ex = await query<{ category: Category; amount: number }>(
     "SELECT category, sum(amount) AS amount FROM finance_expenses WHERE status='approved' AND spent_on >= $1 AND spent_on < $2 GROUP BY category", [a, b]);
   const opex = Object.fromEntries(CATEGORIES.map((c) => [c, (Number(ex.find((e) => e.category === c)?.amount) || 0) * share])) as Record<Category, number>;
   const opexTotal = Object.values(opex).reduce((t, v) => t + v, 0);
   const contribution = s((o) => o.contribution);
   const ebitda = contribution - opexTotal;
-  const depreciation = fs.depreciation_monthly * share;
+  const depreciation = fs.depreciation_monthly * share * (m.length === 7 ? 1 : days / 30);
   const pbt = ebitda - depreciation;
   const tax = Math.max(0, pbt) * fs.tax_rate; // simple monthly provision; the CA trues it up for losses carried forward
   return {
@@ -225,21 +246,21 @@ export async function balances() {
 /* ---------- alerts (FRD section 14) ---------- */
 export async function alerts(cur: Month, bal: Awaited<ReturnType<typeof balances>>) {
   const out: { level: 'bad' | 'warn' | 'ok'; text: string; href?: string }[] = [];
-  const [a, b] = monthRange(cur.m);
+  const [a, b] = periodRange(cur.m);
   const pending = await query<{ n: number }>("SELECT count(*)::int AS n FROM finance_expenses WHERE status='pending'");
   const [mk] = await query<{ spent: number; budget: number }>(
     "SELECT (SELECT coalesce(sum(amount),0) FROM finance_expenses WHERE category='Marketing' AND status='approved' AND spent_on >= $1 AND spent_on < $2) AS spent, (SELECT monthly FROM finance_budgets WHERE category='Marketing') AS budget", [a, b]);
-  if (cur.negative) out.push({ level: 'warn', text: `${cur.negative} orders had negative contribution this month.`, href: `/admin/finance/orders?m=${cur.m}&view=negative` });
+  if (cur.negative) out.push({ level: 'warn', text: `${cur.negative} orders had negative contribution in this period.`, href: `/admin/finance/orders?p=${cur.m}&view=negative` });
   if (bal.overdueN) out.push({ level: 'bad', text: `${bal.overdueN} farmer payouts are past the settlement due date (₹${Math.round(bal.overdue).toLocaleString('en-IN')}).`, href: '/admin/settlements' });
   if (bal.holds) out.push({ level: 'warn', text: `${bal.holds} farmers have payouts on hold.`, href: '/admin/settlements' });
   if (bal.receivables > 0) out.push({ level: 'warn', text: `Businesses owe ₹${Math.round(bal.receivables).toLocaleString('en-IN')} on delivered orders not yet paid.`, href: '/admin/orders' });
   if (cur.gmv && cur.refunds / cur.gmv > 0.015) out.push({ level: 'warn', text: `Refunds borne by the platform are ${(cur.refunds / cur.gmv * 100).toFixed(1)}% of GMV.`, href: '/admin/complaints' });
   if (mk && Number(mk.spent) > Number(mk.budget)) out.push({ level: 'warn', text: `Marketing spend is over its monthly budget.`, href: '/admin/finance/expenses' });
   if (pending[0]?.n) out.push({ level: 'warn', text: `${pending[0].n} expenses are waiting for approval.`, href: '/admin/finance/expenses' });
-  if (cur.ebitda < 0) out.push({ level: 'bad', text: `Operating loss this month so far (EBITDA ₹${Math.round(cur.ebitda).toLocaleString('en-IN')}).` });
+  if (cur.ebitda < 0) out.push({ level: 'bad', text: `Operating loss in this period (EBITDA ₹${Math.round(cur.ebitda).toLocaleString('en-IN')}).` });
   if (bal.openingCash && bal.ownCash < bal.reserve) out.push({ level: 'bad', text: `Company cash is below the minimum reserve of ₹${bal.reserve.toLocaleString('en-IN')}.` });
-  if (!bal.openingCash) out.push({ level: 'warn', text: 'Set the opening bank balance below so cash figures are meaningful.' });
-  if (cur.estimatedOrders) out.push({ level: 'warn', text: `${cur.estimatedOrders} orders use standard costs because actual delivery, packing or gateway costs aren't recorded yet.`, href: `/admin/finance/orders?m=${cur.m}` });
+  if (!bal.openingCash) out.push({ level: 'warn', text: 'Set the opening bank balance so cash figures are meaningful.', href: '/admin/finance/pnl#assumptions' });
+  if (cur.estimatedOrders) out.push({ level: 'warn', text: `${cur.estimatedOrders} orders use standard costs because actual delivery, packing or gateway costs aren't recorded yet.`, href: `/admin/finance/orders?p=${cur.m}` });
   if (!out.some((x) => x.level === 'bad')) out.push({ level: 'ok', text: 'No critical finance alerts.' });
   return out;
 }
@@ -247,20 +268,49 @@ export async function alerts(cur: Month, bal: Awaited<ReturnType<typeof balances
 export const inr = (n: number, dec = 0) => `${n < 0 ? '−' : ''}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: dec, minimumFractionDigits: dec })}`;
 export function compact(n: number) {
   const a = Math.abs(n), s = n < 0 ? '−' : '';
-  if (a >= 1e7) return `${s}₹${(a / 1e7).toFixed(2)} Cr`;
-  if (a >= 1e5) return `${s}₹${(a / 1e5).toFixed(2)} L`;
+  if (a >= 1e7) return `${s}₹${(a / 1e7).toFixed(2)}Cr`;
+  if (a >= 1e5) return `${s}₹${(a / 1e5).toFixed(2)}L`;
   return inr(n);
 }
 
 /** Options for the filter bar: the last 12 months and the districts farmers are registered in. */
 export async function filterOptions() {
   const now = monthKey();
-  const months = Array.from({ length: 12 }, (_, i) => shiftMonth(now, -i)).map((m) => ({ value: m, label: monthLabel(m) + (m === now ? ' (to date)' : '') }));
+  const months = [{ value: 'last30', label: 'Last 30 days' }, ...Array.from({ length: 12 }, (_, i) => shiftMonth(now, -i)).map((m) => ({ value: m, label: monthLabel(m) + (m === now ? ' (to date)' : '') }))];
+  const crops = (await query<{ name: string }>('SELECT name FROM crops ORDER BY name')).map((c) => c.name);
   const districts = (await query<{ district: string }>("SELECT DISTINCT district FROM farmer_profiles WHERE district <> '' ORDER BY district")).map((d) => d.district);
-  return { months, districts };
+  return { months, districts, crops };
 }
 export const filtersFrom = (sp: Record<string, string>): Filters => ({
   channel: sp.ch === 'b2c' || sp.ch === 'b2b' ? sp.ch : undefined,
   state: sp.st === 'Telangana' || sp.st === 'Andhra Pradesh' ? sp.st : undefined,
   district: sp.d || undefined,
+  crop: sp.crop || undefined,
 });
+
+/* ---------- settlements, receivables ---------- */
+export async function settlementPanel(p: string) {
+  const fs = await getFinanceSettings();
+  const [a, b] = periodRange(p);
+  const [r] = await query(`
+    SELECT (SELECT coalesce(sum(net),0) FROM settlements WHERE status='paid' AND paid_at >= $1::date AND paid_at < $2::date) AS paid,
+           (SELECT count(*)::int FROM settlements WHERE status='paid' AND paid_at >= $1::date AND paid_at < $2::date) AS paid_n`, [a, b]);
+  const recent = await query(`
+    SELECT * FROM (
+      SELECT u.name, fp.district, fp.state, st.net AS amount, 'Paid' AS status, st.paid_at AS at, st.utr FROM settlements st
+        JOIN users u ON u.id=st.farmer_id LEFT JOIN farmer_profiles fp ON fp.user_id=st.farmer_id WHERE st.status='paid'
+      UNION ALL
+      SELECT u.name, fp.district, fp.state, d.net, CASE WHEN fp.payout_hold <> '' THEN 'On hold' ELSE 'Due' END, NULL, fp.payout_hold
+        FROM (${DUE_SQL} GROUP BY s.farmer_id) d JOIN users u ON u.id=d.farmer_id LEFT JOIN farmer_profiles fp ON fp.user_id=d.farmer_id
+    ) x ORDER BY (status='Paid'), at DESC NULLS FIRST, amount DESC LIMIT 8`);
+  return { paid: Number(r.paid), paidN: r.paid_n, recent, slaDays: fs.settlement_sla_days };
+}
+
+export async function receivables() {
+  return query(`
+    SELECT o.order_no, coalesce(bp.legal_name, u.name) AS buyer, bp.gstin, o.total, o.delivered_at, o.status,
+           greatest(0, (current_date - o.delivered_at::date))::int AS days
+      FROM orders o JOIN users u ON u.id=o.buyer_id LEFT JOIN business_profiles bp ON bp.user_id=o.buyer_id
+     WHERE u.role='business' AND o.status IN ('delivered','completed') AND o.payment_status='pending'
+     ORDER BY o.delivered_at`);
+}

@@ -1,15 +1,13 @@
-import AdminNav from '@/components/AdminNav';
 import { Chip, Empty, Flash, PageHead, fmtDate } from '@/components/ui';
 import { query } from '@/lib/db';
 import { CATEGORIES, inr, monthKey, monthLabel, monthRange, shiftMonth } from '@/lib/finance';
-import FinanceNav from '../FinanceNav';
 import { requireFinance } from '../guard';
 import { addExpense, decideExpense, saveBudgets } from '../actions';
 
 export const metadata = { title: 'Expenses · Finance' };
 
 export default async function Expenses({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const { role } = await requireFinance('expenses');
+  await requireFinance('expenses');
   const sp = await searchParams;
   const m = /^\d{4}-\d{2}$/.test(sp.m ?? '') ? sp.m : monthKey();
   const [a, b] = monthRange(m);
@@ -26,9 +24,7 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
   const totals = { v: CATEGORIES.reduce((t, c) => t + val(byCat, c), 0), p: CATEGORIES.reduce((t, c) => t + val(prevCat, c), 0), b: CATEGORIES.reduce((t, c) => t + val(budgets, c, 'monthly'), 0) };
 
   return (
-    <main className="wrap">
-      <AdminNav current="/admin/finance" />
-      <FinanceNav current="/admin/finance/expenses" role={role} />
+    <>
       <PageHead title="Expenses" sub="Company operating costs. Per-order costs (delivery partners, packing, gateway fees) are on Order economics." />
       <Flash sp={sp} />
       <form method="get" className="row" style={{ marginBottom: 14 }}>
@@ -101,6 +97,6 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
           </table></div>
         )}
       </section>
-    </main>
+    </>
   );
 }

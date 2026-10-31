@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import AdminNav from '@/components/AdminNav';
-import { Empty, PageHead, fmtDate } from '@/components/ui';
-import { filterOptions, filtersFrom, inr, monthKey, monthLabel, ordersForMonth, type OrderEcon } from '@/lib/finance';
-import FinanceNav, { FilterBar } from '../FinanceNav';
+import { Suspense } from 'react';
+import { Empty, fmtDate } from '@/components/ui';
+import { filterOptions, filtersFrom, inr, ordersForMonth, periodFrom, periodLabel, type OrderEcon } from '@/lib/finance';
+import FinanceHeader from '../FinanceHeader';
 import { requireFinance } from '../guard';
 
 export const metadata = { title: 'Order economics · Finance' };
@@ -10,9 +10,9 @@ export const metadata = { title: 'Order economics · Finance' };
 const VIEWS = [['all', 'All completed'], ['negative', 'Negative contribution'], ['estimated', 'Using standard costs']] as const;
 
 export default async function OrderEconomics({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const { role } = await requireFinance('orders');
+  await requireFinance('orders');
   const sp = await searchParams;
-  const m = /^\d{4}-\d{2}$/.test(sp.m ?? '') ? sp.m : monthKey();
+  const m = periodFrom(sp);
   const view = VIEWS.some(([v]) => v === sp.view) ? sp.view : 'all';
   const [all, opts] = await Promise.all([ordersForMonth(m, filtersFrom(sp)), filterOptions()]);
   const rows = view === 'negative' ? all.filter((o) => o.contribution < 0).sort((a, b) => a.contribution - b.contribution)
@@ -24,17 +24,15 @@ export default async function OrderEconomics({ searchParams }: { searchParams: P
     return { n: list.length, aov: s((o) => o.gmv) / n, rev: s((o) => o.revenue) / n, cost: s((o) => o.variable) / n, c: s((o) => o.contribution) / n, perKg: s((o) => o.contribution) / kg, neg: list.filter((o) => o.contribution < 0).length };
   };
   const b2c = unit(all.filter((o) => o.channel === 'b2c')), b2b = unit(all.filter((o) => o.channel === 'b2b'));
-  const qs = (v: string) => new URLSearchParams({ ...sp, m, view: v }).toString();
+  const qs = (v: string) => new URLSearchParams({ ...sp, p: m, view: v }).toString();
 
   return (
-    <main className="wrap">
-      <AdminNav current="/admin/finance" />
-      <FinanceNav current="/admin/finance/orders" role={role} />
-      <PageHead title="Order economics" sub="Contribution = commission + delivery fee + packing fee − delivery partner cost − packing and handling − gateway fee − refunds the platform bears." />
-      <FilterBar path="/admin/finance/orders" sp={{ ...sp, m }} {...opts} />
+    <>
+      <Suspense><FinanceHeader title="Order economics" exportReport="orders" {...opts}
+        sub="Contribution = commission + delivery fee + packing fee − delivery partner cost − packing and handling − gateway fee − refunds the platform bears." /></Suspense>
 
       <div className="table-wrap" style={{ marginBottom: 20 }}><table>
-        <thead><tr><th>{monthLabel(m)}</th><th className="r">Households</th><th className="r">Businesses</th></tr></thead>
+        <thead><tr><th>{periodLabel(m)}</th><th className="r">Households</th><th className="r">Businesses</th></tr></thead>
         <tbody>
           <tr><td>Completed orders</td><td className="r num">{b2c.n}</td><td className="r num">{b2b.n}</td></tr>
           <tr><td>Average order value (GMV)</td><td className="r num">{inr(b2c.aov)}</td><td className="r num">{inr(b2b.aov)}</td></tr>
@@ -74,6 +72,6 @@ export default async function OrderEconomics({ searchParams }: { searchParams: P
         </table></div>
       )}
       <p className="small muted" style={{ marginTop: 8 }}>* Standard cost from Finance assumptions; replaced automatically once the actual cost is recorded on the order.{rows.length > 300 ? ` Showing 300 of ${rows.length}.` : ''}</p>
-    </main>
+    </>
   );
 }
