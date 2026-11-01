@@ -53,6 +53,10 @@ export async function runJobs() {
     });
   }
 
+  // Subscription boxes due tomorrow are filled from 6 pm the evening before, at that day's prices.
+  const { buildDueBoxes } = await import('./subscriptions');
+  await buildDueBoxes();
+
   // 10.1: delivered orders become Completed after the complaint window; that makes farmer earnings Due.
   await query(
     `UPDATE orders o SET status='completed', completed_at=now(),

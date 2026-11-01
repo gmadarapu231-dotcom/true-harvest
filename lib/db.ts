@@ -79,6 +79,8 @@ async function init(): Promise<Driver> {
   await driver.exec(fs.readFileSync(path.join(process.cwd(), 'db', 'services.sql'), 'utf8'));
   const { seedServicesIfEmpty } = await import('./seed-services');
   await seedServicesIfEmpty(driver);
+  // Vegetable box subscriptions and the nutrition assistant.
+  await driver.exec(fs.readFileSync(path.join(process.cwd(), 'db', 'subscriptions.sql'), 'utf8'));
   return driver;
 }
 

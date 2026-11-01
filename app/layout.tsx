@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // Bottom tab bar on phones (mirrors the app: Home, Marketplace, Orders, Wallet).
   const tabs: NavItem[] = !user || user.role === 'consumer'
-    ? [{ href: '/', label: 'Home', icon: 'home' }, { href: '/shop', label: t('nav.shop'), icon: 'store' }, { href: '/cart', label: t('nav.cart'), icon: 'cart' }, { href: user ? '/orders' : '/login', label: user ? t('nav.orders') : t('nav.login'), icon: user ? 'orders' : 'user' }]
+    ? [{ href: '/', label: 'Home', icon: 'home' }, { href: '/shop', label: t('nav.shop'), icon: 'store' }, { href: user ? '/subscriptions' : '/subscribe', label: t('nav.subscribe'), icon: 'sprout' }, { href: '/cart', label: t('nav.cart'), icon: 'cart' }, { href: user ? '/orders' : '/login', label: user ? t('nav.orders') : t('nav.login'), icon: user ? 'orders' : 'user' }]
     : user.role === 'farmer'
       ? [{ href: '/farmer', label: t('nav.farmer'), icon: 'home' }, { href: '/farmer/listings', label: t('nav.listings'), icon: 'wheat' }, { href: '/farmer/orders', label: t('nav.orders'), icon: 'orders' }, { href: '/farmer/enquiries', label: t('nav.enquiries'), icon: 'handshake' }, { href: '/farmer/payments', label: t('nav.payments'), icon: 'wallet' }]
       : user.role === 'business'
@@ -44,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           : [{ href: '/admin', label: 'Overview', icon: 'chart' }, { href: '/admin/orders', label: 'Orders', icon: 'orders' }, { href: '/admin/farmers', label: 'Farmers', icon: 'farmer' }, { href: '/admin/settlements', label: 'Settlements', icon: 'rupee' }];
   // Desktop header links. Farmers and ops staff get a sidebar instead.
   const links: NavItem[] = !user || user.role === 'consumer'
-    ? [{ href: '/shop', label: t('nav.shop'), icon: '' }, { href: '/crops', label: t('nav.crops'), icon: '' }, { href: '/rentals', label: t('nav.rentals'), icon: '' }, { href: '/inputs', label: t('nav.inputs'), icon: '' }, { href: '/groups', label: t('nav.groups'), icon: '' }, ...(user ? [{ href: '/orders', label: t('nav.orders'), icon: '' }] : [{ href: '/#about', label: 'About Us', icon: '' }])]
+    ? [{ href: '/shop', label: t('nav.shop'), icon: '' }, { href: user ? '/subscriptions' : '/subscribe', label: t('nav.subscribe'), icon: '' }, { href: '/nutrition', label: t('nav.nutrition'), icon: '' }, { href: '/crops', label: t('nav.crops'), icon: '' }, { href: '/rentals', label: t('nav.rentals'), icon: '' }, { href: '/inputs', label: t('nav.inputs'), icon: '' }, { href: '/groups', label: t('nav.groups'), icon: '' }, ...(user ? [{ href: '/orders', label: t('nav.orders'), icon: '' }] : [{ href: '/#about', label: 'About Us', icon: '' }])]
     : user.role === 'business'
       ? [{ href: '/business', label: 'Dashboard', icon: '' }, { href: '/shop', label: 'Marketplace', icon: '' }, { href: '/business/enquiries/new', label: 'Post requirement', icon: '' }, { href: '/orders', label: 'Orders', icon: '' }]
       : user.role === 'partner' ? [{ href: '/partner', label: 'Today’s tasks', icon: '' }]
@@ -63,7 +63,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="wrap">
             <Link href={home} className="brand" aria-label={`${BRAND.name} home`}><Logo tagline /></Link>
             <nav aria-label="Main">
-              {links.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}
+              {links.map((n) => <Link key={n.href} href={n.href} className={n.href === '/#about' || n.href === '/groups' ? 'nav-wide' : undefined}>{n.label}</Link>)}
             </nav>
             <div className="right">
               <form action={setLang} className="lang-toggle" aria-label="Language">

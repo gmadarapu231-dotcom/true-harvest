@@ -524,3 +524,36 @@ details > summary::-webkit-details-marker { display: none; }
   .dash:has(.fin) .side-title, .dash:has(.fin) .side a span { display: none; }
   .dash:has(.fin) .side a { justify-content: center; padding: 11px 0; }
 }
+
+/* Vegetable box subscriptions and the nutrition plan */
+.plans { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 720px) { .plans { grid-template-columns: repeat(4, 1fr); } }
+.plans label { display: block; position: relative; }
+.plans input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.plans .plan { display: block; height: 100%; padding: 14px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--paper); cursor: pointer; }
+.plans .plan b { display: block; font-family: var(--display); font-size: 1.15rem; color: var(--green-dark); }
+.plans input:checked + .plan { border-color: var(--green); background: var(--green-soft); box-shadow: 0 0 0 2px var(--green) inset; }
+.plans input:focus-visible + .plan { outline: 3px solid rgba(214, 154, 51, 0.6); }
+.sub-layout { display: grid; gap: 18px; }
+@media (min-width: 980px) { .sub-layout { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; } .sub-layout > aside { position: sticky; top: 84px; } }
+.nplan { display: grid; gap: 14px; }
+.nplan-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.nplan-items li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.nplan-emoji { font-size: 1.3rem; }
+.nplan-bars { display: grid; gap: 6px; }
+.nbar { display: grid; grid-template-columns: 84px 1fr 44px; gap: 8px; align-items: center; font-size: 0.86rem; }
+.nbar-track { height: 9px; background: #eeebe3; border-radius: 999px; overflow: hidden; }
+.nbar-fill { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+.nbar-fill.low { background: var(--turmeric); }
+.qa { display: grid; gap: 10px; }
+.qa .q { font-weight: 650; }
+.qa .a { white-space: pre-wrap; background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+
+/* Header nav: keep every label on one line; tighten, then drop the least-used links, as the window narrows */
+.top nav a { white-space: nowrap; }
+@media (min-width: 1100px) and (max-width: 1439px) {
+  .top nav { margin-left: 4px; gap: 0; }
+  .top nav a { padding: 8px 8px; font-size: 0.9rem; }
+  .top .wrap { gap: 10px; }
+}
+@media (max-width: 1279px) { .top nav a.nav-wide { display: none; } }

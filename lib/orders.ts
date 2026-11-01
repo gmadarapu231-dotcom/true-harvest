@@ -37,6 +37,10 @@ async function event(q: Queryable, orderId: number, subOrderId: number | null, s
 export async function placeOrder(input: {
   buyerId: number; channel: 'b2c' | 'b2b'; lines: CartLine[]; address: string; pin: string;
   deliveryDate: string; slot: string; paymentMode: 'online' | 'pay_on_delivery';
+  /** Subscription boxes: delivery and packing are included in the plan, so the buyer pays only for produce. */
+  waiveFees?: boolean;
+  /** Subscription boxes are assembled at the hub, so they may mix farms even when the cart may not. */
+  mixFarms?: boolean;
 }) {
   return tx(async (q) => {
     const s = await getSettings(q);
@@ -66,7 +70,7 @@ export async function placeOrder(input: {
       if (input.channel === 'b2b' && kg < l.min_order_kg) { problems.push(`${l.crop_name}: minimum order is ${l.min_order_kg} kg`); bad.push(l.id); }
     }
     const farmers = new Set(input.lines.map((l) => byId.get(l.listingId)?.farmer_id));
-    if (input.channel === 'b2c' && !s.multi_farmer_cart && farmers.size > 1) {
+    if (input.channel === 'b2c' && !s.multi_farmer_cart && !input.mixFarms && farmers.size > 1) {
       throw new OrderError('Your cart has items from more than one farmer. For now each order comes from one farm. Please remove the other farmer’s items.');
     }
     if (problems.length) throw new StockError(problems.join('. ') + '.', bad);
@@ -75,8 +79,8 @@ export async function placeOrder(input: {
     if (input.channel === 'b2c' && totalItems < s.min_order_value) {
       throw new OrderError(`Minimum order value is ${rupee(s.min_order_value)}. Add ${rupee(round2(s.min_order_value - totalItems))} more.`);
     }
-    const deliveryFee = deliveryFeeFor(s, totalItems, input.channel);
-    const packingFee = input.channel === 'b2c' ? s.packing_fee : 0;
+    const deliveryFee = input.waiveFees ? 0 : deliveryFeeFor(s, totalItems, input.channel);
+    const packingFee = input.channel === 'b2c' && !input.waiveFees ? s.packing_fee : 0;
     const rate = input.channel === 'b2c' ? s.commission_b2c : s.commission_b2b;
     const pod = input.paymentMode === 'pay_on_delivery';
 
