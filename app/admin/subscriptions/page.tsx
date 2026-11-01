@@ -13,7 +13,7 @@ export default async function AdminSubscriptions({ searchParams }: { searchParam
   const [st] = await query(
     `SELECT (SELECT count(*)::int FROM subscriptions WHERE status='active') AS active,
             (SELECT count(*)::int FROM subscriptions WHERE status='paused') AS paused,
-            (SELECT count(*)::int FROM subscription_deliveries WHERE status='scheduled' AND deliver_on = (now() AT TIME ZONE 'Asia/Kolkata')::date + 1) AS tomorrow,
+            (SELECT count(*)::int FROM subscription_deliveries WHERE status IN ('scheduled','placed') AND deliver_on = (now() AT TIME ZONE 'Asia/Kolkata')::date + 1) AS tomorrow,
             (SELECT count(*)::int FROM subscription_deliveries WHERE status='failed' AND deliver_on > current_date - 7) AS failed,
             (SELECT coalesce(sum(o.items_total),0) FROM subscription_deliveries d JOIN orders o ON o.id=d.order_id WHERE d.deliver_on > current_date - 30) AS sales`);
   const upcoming = await query(
