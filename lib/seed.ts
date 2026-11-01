@@ -48,7 +48,12 @@ export async function seedIfEmpty(db: Queryable & { tx<T>(fn: (q: Queryable) => 
       const shelf = cat === 'leafy' ? 2 : cat === 'vegetables' ? 5 : cat === 'fruits' ? 7 : 180;
       await q.query('INSERT INTO crops (name, name_te, category, emoji, shelf_life_days) VALUES ($1,$2,$3,$4,$5)', [name, te, cat, emoji, shelf]);
     }
-    const crop = async (name: string) => (await q.query('SELECT id FROM crops WHERE name=$1', [name]))[0].id as number;
+    // Crop ids are looked up once: the database may be a long round trip away (a hosted Postgres in another region).
+    const cropIds = new Map<string, number>();
+    const crop = async (name: string) => {
+      if (!cropIds.has(name)) cropIds.set(name, (await q.query('SELECT id FROM crops WHERE name=$1', [name]))[0].id as number);
+      return cropIds.get(name)!;
+    };
     const user = async (phone: string, name: string, role: string, extra: { address?: string; pin?: string; district?: string; lang?: string } = {}) =>
       (await q.query(
         'INSERT INTO users (phone, name, role, address, pin, district, lang, consent_at) VALUES ($1,$2,$3,$4,$5,$6,$7, now()) RETURNING id',
@@ -173,13 +178,13 @@ export async function seedIfEmpty(db: Queryable & { tx<T>(fn: (q: Queryable) => 
       ['Okra', 'Bowenpally, Hyderabad', 2800, 4000, 3400], ['Red gram', 'Warangal (Enumamula)', 8800, 10200, 9600],
     ];
     for (const [c, market, min, max, modal] of mandi) {
-      await q.query('INSERT INTO mandi_prices (crop_id, market, date, min_price, max_price, modal_price) VALUES ($1,$2,current_date,$3,$4,$5)', [await crop(c), market, min, max, modal]);
-      // Four weeks of history so the price-trend charts have something to draw: a gentle seasonal swing ending at today's rate.
-      for (let d = 1; d <= 28; d++) {
-        const f = 1 - 0.07 * Math.sin(d / 4) - 0.0025 * d + 0.02 * Math.sin(d * 1.7);
-        await q.query('INSERT INTO mandi_prices (crop_id, market, date, min_price, max_price, modal_price) VALUES ($1,$2,current_date - $3::int,$4,$5,$6)',
-          [await crop(c), market, d, Math.round(min * f), Math.round(max * f), Math.round(modal * f)]);
-      }
+      // Today's rate plus four weeks of history so the price-trend charts have something to draw: a gentle seasonal swing
+      // ending at today's rate. One statement per market keeps start-up quick against a remote database.
+      await q.query(
+        `INSERT INTO mandi_prices (crop_id, market, date, min_price, max_price, modal_price)
+         SELECT $1, $2, current_date - d, round($3 * f), round($4 * f), round($5 * f)
+           FROM generate_series(0, 28) d, LATERAL (SELECT CASE WHEN d = 0 THEN 1 ELSE 1 - 0.07 * sin(d / 4.0) - 0.0025 * d + 0.02 * sin(d * 1.7) END AS f) x`,
+        [await crop(c), market, min, max, modal]);
     }
     await q.query("INSERT INTO notifications (user_id, title, body, link) VALUES ($1, 'New order to accept', 'Order from Kondapur: 3 kg Mango, 2 kg Banana.', '/farmer/orders')", [fid['Padmavathi K']]);
   });
